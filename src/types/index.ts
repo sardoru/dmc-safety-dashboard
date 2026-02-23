@@ -44,6 +44,18 @@ export interface RadioEntry {
   channel: string;
   text: string;
   urgency: 'emergency' | 'caution' | 'routine';
+  energy?: number;
+  duration_seconds?: number;
+}
+
+export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'mock';
+export type ConnectionMode = 'live' | 'mock';
+
+export interface RadioHealthResponse {
+  status: string;
+  uptime: number;
+  transcriptions_count: number;
+  clients_connected: number;
 }
 
 export interface UserProfile {
