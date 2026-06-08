@@ -47,6 +47,10 @@ interface AlertContextType {
 
 const AlertContext = createContext<AlertContextType | null>(null);
 
+// Unique per-subscription suffix so a remount/StrictMode re-run never reuses an
+// already-subscribed channel name (see useBusinesses for the failure mode).
+let reportChannelSeq = 0;
+
 function reportToAlert(r: Report): Alert {
   return {
     id: r.id,
@@ -128,7 +132,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
       });
 
     const channel = supabase
-      .channel('public:reports')
+      .channel(`reports-${++reportChannelSeq}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reports' },

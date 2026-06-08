@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext';
 import { requestNotificationPermission } from './utils/helpers';
 import Header from './components/Header';
 import MapView from './components/MapView';
+import ErrorBoundary from './components/ErrorBoundary';
 import RadioFeed from './components/RadioFeed';
 import AlertHistory from './components/AlertHistory';
 import CallForHelp from './components/CallForHelp';
@@ -74,7 +75,9 @@ export default function App() {
 
           {/* Center: Map */}
           <div className="flex-1 p-2 min-w-0">
-            <MapView flyToRef={flyToRef} />
+            <ErrorBoundary label="map-desktop">
+              <MapView flyToRef={flyToRef} />
+            </ErrorBoundary>
           </div>
 
           <button
@@ -104,7 +107,11 @@ export default function App() {
         {/* Mobile layout */}
         <div className="md:hidden flex-1 overflow-hidden">
           <div className="h-full p-2 pb-16">
-            {mobileTab === 'map' && <MapView flyToRef={flyToRef} />}
+            {mobileTab === 'map' && (
+              <ErrorBoundary label="map-mobile">
+                <MapView flyToRef={flyToRef} />
+              </ErrorBoundary>
+            )}
             {mobileTab === 'radio' && <RadioFeed />}
             {mobileTab === 'alerts' && <AlertHistory onFocusAlert={handleFocusAlert} />}
             {mobileTab === 'profile' && <ProfilePage />}

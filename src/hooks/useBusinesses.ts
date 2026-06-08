@@ -30,6 +30,12 @@ function rowToBusiness(row: BusinessRow): Business {
   };
 }
 
+// Unique per-subscription suffix. This hook renders in BOTH <Header> and
+// <MapView>, so a fixed channel name ('public:businesses') collides — the
+// second subscriber throws "cannot add postgres_changes callbacks ... after
+// subscribe()", which (pre-ErrorBoundary) white-screened the whole app on login.
+let channelSeq = 0;
+
 /**
  * Registered businesses for the map/stats. Uses real Supabase rows when
  * connected (live-updating), and the demo set otherwise.
@@ -53,7 +59,7 @@ export function useBusinesses(): Business[] {
     void load();
 
     const channel = supabase
-      .channel('public:businesses')
+      .channel(`businesses-${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => {
         void load();
       })
