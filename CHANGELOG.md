@@ -20,6 +20,13 @@ The app is now **live with real auth** at https://dmc-safety-dashboard.vercel.ap
   own `<audio>` element with play/pause + volume — instead of opening Broadcastify
   in a popup. Falls back to the popup player automatically if the stream errors.
 
+- **Left panel is a real "Activity Feed" now.** Removed the simulated police-radio
+  chatter (deleted `mockRadio.ts`; `RadioContext` no longer has a mock mode). The
+  panel shows **only real data** — submitted reports (officer voice + business
+  Call-for-Help, via Supabase) merged with live scanner transcriptions when the
+  radio-transcriptor bridge is connected — time-sorted, with an empty state when
+  there's nothing yet.
+
 ### Fixed
 - **All `/api` functions returned `500` in production** (`ERR_MODULE_NOT_FOUND`).
   With `package.json` `"type":"module"`, Vercel runs the functions as native ESM,
