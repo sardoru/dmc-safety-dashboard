@@ -64,7 +64,7 @@ Copy [`.env.example`](./.env.example). Client vars (`VITE_…`) go in the build;
 | --- | --- | --- |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | client | Supabase client |
 | `VITE_SITE_URL` | client | origin used in email links |
-| `VITE_BROADCASTIFY_FEED_ID` / `VITE_BROADCASTIFY_STREAM_URL` | client | Memphis PD scanner (feed `215`; optional direct stream) |
+| `VITE_BROADCASTIFY_FEED_ID` / `VITE_BROADCASTIFY_STREAM_URL` | client | Memphis PD scanner. Feed `215` streams inline by default; `STREAM_URL` optionally overrides the mount |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | server | admin DB + session minting |
 | `SITE_URL` | server | WebAuthn + email links |
 | `ADMIN_EMAILS` | server | _documented but not wired in code_ — `admin` comes from the `officer_invites` seed in `0001_init.sql` + the `handle_new_user` trigger |
@@ -74,8 +74,8 @@ Copy [`.env.example`](./.env.example). Client vars (`VITE_…`) go in the build;
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying-party (defaults to request host) |
 
 ### 5. Memphis PD scanner
-- Default: a one-tap popup of the official **Broadcastify feed 215** player ("Memphis Police & Shelby County Sheriff").
-- For seamless **inline** audio, set `VITE_BROADCASTIFY_STREAM_URL` to a Broadcastify Premium / relay direct stream (CORS is open on the stream).
+- **Plays inline by default.** Clicking play streams Broadcastify **feed 215** ("Memphis Police & Shelby County Sheriff") directly in the dashboard from its CORS-open Icecast mount (`https://broadcastify.cdnstream1.com/215`) — no popup, no extra config.
+- `VITE_BROADCASTIFY_STREAM_URL` overrides the stream (e.g. a Broadcastify Premium / relay URL). If the stream ever fails to play, the UI automatically falls back to a one-tap popup of the official player.
 
 ---
 

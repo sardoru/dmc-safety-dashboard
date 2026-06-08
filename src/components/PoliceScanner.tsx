@@ -3,7 +3,12 @@ import { RadioTower, Play, Pause, Volume2, ExternalLink, Loader2 } from 'lucide-
 import { useTheme } from '../context/ThemeContext';
 
 const FEED_ID = (import.meta.env.VITE_BROADCASTIFY_FEED_ID as string) || '215';
-const STREAM_URL = import.meta.env.VITE_BROADCASTIFY_STREAM_URL as string | undefined;
+// Broadcastify's own web player streams this CORS-open (`access-control-allow-origin: *`)
+// Icecast MP3 mount, so we can play it inline in our own <audio> with no popup/iframe.
+// An explicit VITE_BROADCASTIFY_STREAM_URL (e.g. a Premium relay) still wins if set.
+const STREAM_URL =
+  (import.meta.env.VITE_BROADCASTIFY_STREAM_URL as string | undefined) ||
+  `https://broadcastify.cdnstream1.com/${FEED_ID}`;
 const LISTEN_URL = `https://www.broadcastify.com/listen/feed/${FEED_ID}`;
 const PLAYER_URL = `https://www.broadcastify.com/webPlayer/${FEED_ID}`;
 

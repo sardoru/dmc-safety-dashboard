@@ -13,6 +13,13 @@ The app is now **live with real auth** at https://dmc-safety-dashboard.vercel.ap
   `ugsuzbek@gmail.com` (seeded this session) are pending-admin `officer_invites` —
   each becomes `admin` automatically on first magic-link login.
 
+### Changed
+- **Police scanner plays inline.** The Memphis PD scanner (Broadcastify feed 215)
+  now streams **inside the dashboard** when you press play — it uses the feed's
+  CORS-open Icecast mount (`https://broadcastify.cdnstream1.com/215`) in the app's
+  own `<audio>` element with play/pause + volume — instead of opening Broadcastify
+  in a popup. Falls back to the popup player automatically if the stream errors.
+
 ### Fixed
 - **All `/api` functions returned `500` in production** (`ERR_MODULE_NOT_FOUND`).
   With `package.json` `"type":"module"`, Vercel runs the functions as native ESM,
