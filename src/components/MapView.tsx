@@ -121,13 +121,15 @@ export default function MapView({ flyToRef }: MapViewProps) {
     }
   }, [flyToRef, handleFocusAlert]);
 
+  // CARTO Voyager (light) / Dark Matter (dark) — clean OSM-based basemaps that
+  // read well behind the markers. Retina (`{r}` → @2x via detectRetina) keeps
+  // them crisp on high-DPI screens.
   const tileUrl = dark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
-  const tileAttrib = dark
-    ? '&copy; <a href="https://carto.com/">CARTO</a>'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  const tileAttrib =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   const allAlerts = useAlerts().alerts;
   const recentAlerts = allAlerts.filter(a => a.timestamp > Date.now() - 48 * 3600_000);
@@ -140,7 +142,7 @@ export default function MapView({ flyToRef }: MapViewProps) {
         className="w-full h-full"
         zoomControl={true}
       >
-        <TileLayer url={tileUrl} attribution={tileAttrib} />
+        <TileLayer key={dark ? 'dark' : 'light'} url={tileUrl} attribution={tileAttrib} detectRetina />
 
         {flyTarget && <FlyTo center={flyTarget.center} zoom={flyTarget.zoom} />}
 
