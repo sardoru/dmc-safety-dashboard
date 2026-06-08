@@ -19,6 +19,7 @@ Real-time safety monitoring for **Downtown Memphis Commission** businesses and D
 - **Passwordless magic links** (Supabase Auth) with **branded HTML emails** sent through **Resend** via a Supabase *Send Email* hook.
 - **Passkeys** (WebAuthn / Apple Face ID · Touch ID) for instant re-login, including usernameless sign-in.
 - Three roles: `business` (self sign-up), `officer` (admin-invited), `admin`.
+- The dashboard (`/`) is **public** — anyone can view the map + scanner; only `/account`, `/officer`, `/admin` require sign-in. Live incident + business data stays RLS-gated to signed-in users.
 
 ---
 
@@ -66,7 +67,7 @@ Copy [`.env.example`](./.env.example). Client vars (`VITE_…`) go in the build;
 | `VITE_BROADCASTIFY_FEED_ID` / `VITE_BROADCASTIFY_STREAM_URL` | client | Memphis PD scanner (feed `215`; optional direct stream) |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | server | admin DB + session minting |
 | `SITE_URL` | server | WebAuthn + email links |
-| `ADMIN_EMAILS` | server | comma-list auto-granted `admin` |
+| `ADMIN_EMAILS` | server | _documented but not wired in code_ — `admin` comes from the `officer_invites` seed in `0001_init.sql` + the `handle_new_user` trigger |
 | `OPENAI_API_KEY`, `OPENAI_REALTIME_MODEL`, `OPENAI_TRANSCRIBE_MODEL` | server | voice + transcription |
 | `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails |
 | `SEND_EMAIL_HOOK_SECRET` | server | verify Supabase email hook |
@@ -93,6 +94,8 @@ vercel dev           # serves the SPA + /api functions together
 ```
 
 `npm run build` runs `tsc -b && vite build`. Type-check the serverless functions separately with `npx tsc -p api/tsconfig.json --noEmit`.
+
+> **⚠️ ESM gotcha (`/api`):** because `package.json` has `"type": "module"`, Vercel runs the compiled functions as **native ESM** — so **every relative import inside `/api` must include the `.js` extension** (`from './_lib/http.js'`, not `'./_lib/http'`). Without it the build still passes (`api/tsconfig.json` uses Bundler resolution) but every function throws `ERR_MODULE_NOT_FOUND` → `500` at runtime.
 
 ---
 

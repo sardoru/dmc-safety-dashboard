@@ -3,7 +3,59 @@
 All notable changes to the DMC Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [Unreleased] — 2026-06-07
+## [0.1.0] — 2026-06-08 — Production launch 🚀
+
+Wired the live backend, fixed two production-blocking bugs, and merged to `main`.
+The app is now **live with real auth** at https://dmc-safety-dashboard.vercel.app.
+
+### Added
+- **Whitelisted admins.** `sardoru@gmail.com` (migration-seeded) and
+  `ugsuzbek@gmail.com` (seeded this session) are pending-admin `officer_invites` —
+  each becomes `admin` automatically on first magic-link login.
+
+### Fixed
+- **All `/api` functions returned `500` in production** (`ERR_MODULE_NOT_FOUND`).
+  With `package.json` `"type":"module"`, Vercel runs the functions as native ESM,
+  which requires explicit `.js` extensions on relative imports. Added `.js` to all
+  **28 relative imports across 11 `/api` files**. (Bundler resolution hid this at
+  build time; the SPA was unaffected.)
+- **Public dashboard was unreachable.** `/` was wrapped in `RequireAuth`, so once
+  real Supabase env vars were set, clicking "Continue to the public dashboard" on
+  `/login` bounced straight back to `/login`. Removed the wrapper — `/` is now
+  public (auth still gates `/account`, `/officer`, `/admin`). Verified in a browser.
+
+### Infrastructure / config
+- **Vercel env** set for Production + Development (Supabase URL/anon/service-role,
+  `SITE_URL`, OpenAI, Resend, `SEND_EMAIL_HOOK_SECRET`). **Preview left in demo
+  mode** on purpose (no prod Supabase creds → previews never touch prod data).
+- **Supabase Auth** configured via Management API: Site URL + redirect allow-list
+  (prod `/auth/callback` + `/**`, `localhost:5173`).
+- **Resend Send-Email hook enabled** → branded navy/gold emails replace Supabase's
+  bland default (verified: hook `POST` → `200`; from `safety@sardoru.com`).
+- Deployed to production (CLI `vercel --prod`); **PR #1 merged to `main`** (squash).
+- Hardened `.gitignore` against committing `.env*` secrets.
+
+### Decisions / corrections (supersede earlier notes)
+- **`ADMIN_EMAILS` is NOT wired in code** — admin comes only from the
+  `officer_invites` seed + `handle_new_user` trigger. (README corrected.)
+- **`RP_ID`/`RP_ORIGIN` left unset** → derived from request host, so passkeys work
+  on production *and* preview domains.
+- **`EMAIL_FROM` = `DMC Safety Dashboard <safety@sardoru.com>`** (a verified Resend
+  domain; no DMC-specific domain exists yet).
+- **Deploys are CLI (`vercel --prod`), not git-connected** — merging `main` does
+  not auto-deploy.
+- `ugsuzbek@gmail.com` granted `admin` (could be `officer` if preferred).
+
+### Known / open
+- **Supabase email rate limit still at default 2/hour** — raise to ~30 before
+  onboarding multiple users (attempted this session, deferred as out-of-scope).
+- `ugsuzbek@gmail.com` has not logged in yet (no magic link sent to them).
+- Voice (OpenAI) wired + key validated, but not exercised end-to-end.
+- Rotate/revoke the Supabase Management token used for setup.
+- `vercel.json` `memory` setting is ignored on Active-CPU billing (harmless; can remove).
+- Custom domain `safety.downtownmemphis.com` not set; consider DMC-branded `EMAIL_FROM`.
+
+## 2026-06-07 — Backend build (on `feat/accounts-officer-portal`)
 
 Turned the localStorage prototype into a real multi-tenant app with accounts, a
 voice-first officer portal, a Supabase backend, and live Memphis PD scanner audio.
