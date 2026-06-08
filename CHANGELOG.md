@@ -24,6 +24,16 @@ The app is now **live with real auth** at https://dmc-safety-dashboard.vercel.ap
   `/login` bounced straight back to `/login`. Removed the wrapper — `/` is now
   public (auth still gates `/account`, `/officer`, `/admin`). Verified in a browser.
 
+- **Blank dashboard after magic-link sign-in** ([#2](https://github.com/sardoru/dmc-safety-dashboard/issues/2)).
+  `useBusinesses()` renders in both `<Header>` and `<MapView>`, and both opened a
+  Supabase Realtime channel named `public:businesses` — so the second subscriber
+  threw `cannot add postgres_changes callbacks … after subscribe()`. The
+  subscription only runs when authenticated, so anonymous worked but **every
+  signed-in user got a white screen** (the throw unmounted the whole tree — no
+  error boundary). Fixed with **unique per-subscription channel names**
+  (`useBusinesses` + `AlertContext`) and a new **`ErrorBoundary`** around the map
+  and at the app root, so one failing component can never white-screen the app again.
+
 ### Infrastructure / config
 - **Vercel env** set for Production + Development (Supabase URL/anon/service-role,
   `SITE_URL`, OpenAI, Resend, `SEND_EMAIL_HOOK_SECRET`). **Preview left in demo
