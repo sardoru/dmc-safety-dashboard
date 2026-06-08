@@ -1,6 +1,5 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { RadioEntry, WsStatus, ConnectionMode } from '../types';
-import { generateRadioEntry, generateInitialRadioEntries } from '../data/mockRadio';
 import { generateId } from '../utils/helpers';
 
 const WS_URL = import.meta.env.VITE_RADIO_WS_URL || 'ws://localhost:8765';
@@ -18,67 +17,63 @@ interface RadioContextType {
 
 const RadioContext = createContext<RadioContextType | null>(null);
 
-function classifyUrgency(text: string): RadioEntry['urgency'] {
+/** Heuristic urgency from a transcription or report's text. */
+export function classifyUrgency(text: string): RadioEntry['urgency'] {
   const lower = text.toLowerCase();
-  if (/10-52|code red|emergency|robbery|armed|fire alarm|10-70|backup requested|medical emergency/i.test(lower)) {
+  if (
+    /10-52|code red|emergency|robbery|armed|fire alarm|10-70|backup requested|medical emergency|weapon|assault|shooting/i.test(
+      lower,
+    )
+  ) {
     return 'emergency';
   }
-  if (/be advised|suspicious|complaint|heads up|erratic|noise|unverified|fender bender/i.test(lower)) {
+  if (
+    /be advised|suspicious|complaint|heads up|erratic|noise|unverified|fender bender|theft|trespass|disturbance|vandalism/i.test(
+      lower,
+    )
+  ) {
     return 'caution';
   }
   return 'routine';
 }
 
+/**
+ * Live police-scanner transcription feed from the self-hosted radio-transcriptor
+ * bridge (WebSocket). There is intentionally **no simulated fallback** — when the
+ * bridge is offline the feed simply has no transcriptions, and the dashboard's
+ * activity feed shows real platform reports instead.
+ */
 export function RadioProvider({ children }: { children: ReactNode }) {
-  const [entries, setEntries] = useState<RadioEntry[]>(() => generateInitialRadioEntries(10));
+  const [entries, setEntries] = useState<RadioEntry[]>(() => []);
   const [isLive, setIsLive] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('mock');
   const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef(1000);
-  const mockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLiveRef = useRef(isLive);
   const mountedRef = useRef(true);
 
-  // Keep ref in sync so callbacks always see latest
   useEffect(() => {
     isLiveRef.current = isLive;
   }, [isLive]);
 
   const addEntry = useCallback((entry: RadioEntry) => {
-    setEntries(prev => {
+    setEntries((prev) => {
       const next = [...prev, entry];
       return next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next;
     });
   }, []);
 
-  // ---------- Mock mode ----------
-  const startMock = useCallback(() => {
-    if (mockIntervalRef.current) return;
-    setConnectionMode('mock');
-    setWsStatus('mock');
-    const tick = () => {
-      if (isLiveRef.current) {
-        addEntry(generateRadioEntry());
-      }
-    };
-    mockIntervalRef.current = setInterval(tick, 5000 + Math.random() * 5000);
-  }, [addEntry]);
-
-  const stopMock = useCallback(() => {
-    if (mockIntervalRef.current) {
-      clearInterval(mockIntervalRef.current);
-      mockIntervalRef.current = null;
-    }
-  }, []);
-
-  // ---------- WebSocket ----------
+  // ---------- WebSocket (real transcription bridge only) ----------
   const connect = useCallback(() => {
     if (!isLiveRef.current) return;
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)
+    )
+      return;
 
     setWsStatus('connecting');
 
@@ -86,17 +81,18 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     try {
       ws = new WebSocket(WS_URL);
     } catch {
-      // Invalid URL or blocked — go straight to mock
-      startMock();
+      setWsStatus('disconnected');
+      scheduleReconnect();
       return;
     }
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (!mountedRef.current) { ws.close(); return; }
+      if (!mountedRef.current) {
+        ws.close();
+        return;
+      }
       backoffRef.current = 1000;
-      stopMock();
-      setConnectionMode('live');
       setWsStatus('connected');
     };
 
@@ -105,17 +101,16 @@ export function RadioProvider({ children }: { children: ReactNode }) {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'transcription') {
-          const entry: RadioEntry = {
+          addEntry({
             id: generateId(),
             timestamp: data.timestamp ? new Date(data.timestamp).getTime() : Date.now(),
-            speaker: data.channel || 'Unknown',
-            channel: data.channel || 'Unknown',
+            speaker: data.channel || 'Scanner',
+            channel: data.channel || 'Scanner',
             text: data.text || '',
             urgency: classifyUrgency(data.text || ''),
             energy: data.energy,
             duration_seconds: data.duration_seconds,
-          };
-          addEntry(entry);
+          });
         } else if (data.type === 'vad') {
           setIsSpeaking(data.event === 'speech_start');
         }
@@ -129,15 +124,15 @@ export function RadioProvider({ children }: { children: ReactNode }) {
       wsRef.current = null;
       setWsStatus('disconnected');
       setIsSpeaking(false);
-      startMock();
       scheduleReconnect();
     };
 
     ws.onerror = () => {
-      // onclose will fire after onerror — handled there
+      // onclose fires after onerror — reconnect is handled there.
       ws.close();
     };
-  }, [addEntry, startMock, stopMock]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addEntry]);
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectTimer.current) return;
@@ -145,9 +140,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF);
     reconnectTimer.current = setTimeout(() => {
       reconnectTimer.current = null;
-      if (isLiveRef.current && mountedRef.current) {
-        connect();
-      }
+      if (isLiveRef.current && mountedRef.current) connect();
     }, delay);
   }, [connect]);
 
@@ -156,38 +149,33 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     if (isLive) {
       connect();
-      // Start mock immediately as optimistic fallback — will be stopped if WS connects
-      const fallbackTimer = setTimeout(() => {
-        if (wsStatus !== 'connected' && mountedRef.current) {
-          startMock();
-        }
-      }, 2000);
-      return () => {
-        clearTimeout(fallbackTimer);
-      };
     } else {
-      // Paused
       if (wsRef.current) wsRef.current.close();
-      stopMock();
-      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       if (wsRef.current) wsRef.current.close();
-      stopMock();
-      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
     };
-  }, [stopMock]);
+  }, []);
 
-  const toggleLive = () => setIsLive(l => !l);
+  const toggleLive = () => setIsLive((l) => !l);
 
   return (
-    <RadioContext.Provider value={{ entries, isLive, toggleLive, isSpeaking, connectionMode, wsStatus }}>
+    <RadioContext.Provider
+      value={{ entries, isLive, toggleLive, isSpeaking, connectionMode: 'live', wsStatus }}
+    >
       {children}
     </RadioContext.Provider>
   );
