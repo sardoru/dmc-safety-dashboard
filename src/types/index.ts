@@ -74,3 +74,53 @@ export interface UserProfile {
 export type Theme = 'light' | 'dark';
 
 export type MobileTab = 'map' | 'radio' | 'alerts' | 'profile';
+
+// ── Accounts / backend (Supabase) ────────────────────────────────────────────
+
+export type Role = 'business' | 'officer' | 'admin';
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  role: Role;
+  display_name: string | null;
+}
+
+export type ReportKind = 'voice' | 'quick' | 'incident';
+export type ReportSource = 'officer' | 'business';
+
+/** A persisted report/alert row from the `reports` table. */
+export interface Report {
+  id: string;
+  reporter_id: string | null;
+  source: ReportSource;
+  kind: ReportKind;
+  incident_type: IncidentType;
+  description: string;
+  transcript: string | null;
+  business_id: string | null;
+  business_name: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  status: AlertStatus;
+  acknowledged_by: string[];
+  created_at: string;
+}
+
+export interface OfficerInvite {
+  id: string;
+  email: string;
+  role: Exclude<Role, 'business'>;
+  status: 'pending' | 'claimed' | 'revoked';
+  invited_by: string | null;
+  created_at: string;
+  claimed_at: string | null;
+}
+
+export interface PasskeyInfo {
+  id: string;
+  device_label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}

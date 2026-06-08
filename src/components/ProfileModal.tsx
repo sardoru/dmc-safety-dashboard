@@ -84,8 +84,12 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       registeredAt: profile?.registeredAt ?? Date.now(),
     };
 
-    setProfile(newProfile);
-    onClose();
+    try {
+      await setProfile(newProfile);
+      onClose();
+    } catch {
+      setError('Could not save your business. Please try again.');
+    }
   };
 
   const inputClass = `

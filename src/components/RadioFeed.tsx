@@ -3,6 +3,7 @@ import { Radio, Search, X, Pause, Play, Mic } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRadio } from '../context/RadioContext';
 import { formatTime } from '../utils/helpers';
+import PoliceScanner from './PoliceScanner';
 
 function ConnectionBadge({ wsStatus, dark }: { wsStatus: string; dark: boolean }) {
   switch (wsStatus) {
@@ -108,6 +109,9 @@ export default function RadioFeed() {
           {isLive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
       </div>
+
+      {/* Live Memphis PD scanner */}
+      <PoliceScanner />
 
       {/* Search */}
       <div className={`px-3 py-2 border-b ${dark ? 'border-white/5' : 'border-neutral-100'}`}>

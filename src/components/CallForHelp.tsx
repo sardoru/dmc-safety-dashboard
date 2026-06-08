@@ -30,6 +30,7 @@ export default function CallForHelp() {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
   const { theme } = useTheme();
   const { addAlert } = useAlerts();
   const { profile } = useProfile();
@@ -40,6 +41,7 @@ export default function CallForHelp() {
     setDescription('');
     setSubmitting(false);
     setSuccess(false);
+    setError('');
   };
 
   const handleOpen = () => {
@@ -47,12 +49,13 @@ export default function CallForHelp() {
     setIsOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selected || !profile) return;
     setSubmitting(true);
+    setError('');
 
-    setTimeout(() => {
-      addAlert({
+    try {
+      await addAlert({
         businessId: profile.id,
         businessName: profile.businessName,
         address: profile.address,
@@ -67,7 +70,10 @@ export default function CallForHelp() {
         setIsOpen(false);
         reset();
       }, 1500);
-    }, 500);
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : 'Could not send the alert. Please try again.');
+    }
   };
 
   return (
@@ -183,6 +189,12 @@ export default function CallForHelp() {
                   <Camera className="w-4 h-4" />
                   <span className="fluid-text-sm">Attach Photo</span>
                 </button>
+
+                {error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 text-red-500 fluid-text-sm">
+                    {error}
+                  </div>
+                )}
 
                 {/* Submit */}
                 <button

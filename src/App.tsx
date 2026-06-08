@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from './context/ThemeContext';
 import { useProfile } from './context/ProfileContext';
+import { useAuth } from './context/AuthContext';
 import { requestNotificationPermission } from './utils/helpers';
 import Header from './components/Header';
 import MapView from './components/MapView';
@@ -15,6 +16,7 @@ import type { MobileTab } from './types';
 export default function App() {
   const { theme } = useTheme();
   const { isRegistered } = useProfile();
+  const { configured, role, loading: authLoading } = useAuth();
   const [showRegistration, setShowRegistration] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>('map');
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -27,11 +29,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isRegistered) {
+    // Only nudge business owners to register a storefront — not officers/admins.
+    const isBusinessUser = !configured || role === 'business';
+    if (!authLoading && isBusinessUser && !isRegistered) {
       const timer = setTimeout(() => setShowRegistration(true), 1500);
       return () => clearTimeout(timer);
     }
-  }, [isRegistered]);
+  }, [isRegistered, configured, role, authLoading]);
 
   const handleFocusAlert = (lat: number, lng: number) => {
     flyToRef.current?.(lat, lng);
