@@ -1,5 +1,5 @@
 import type { VercelRequest } from '@vercel/node';
-import { getAdmin } from './supabaseAdmin';
+import { getAdmin } from './supabaseAdmin.js';
 
 export type Role = 'business' | 'officer' | 'admin';
 

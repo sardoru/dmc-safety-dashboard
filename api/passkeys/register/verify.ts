@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
-import { getUser } from '../../_lib/auth';
-import { getAdmin } from '../../_lib/supabaseAdmin';
-import { rpInfo, bytesToB64url } from '../../_lib/webauthn';
-import { sendError, sendJson, methodNotAllowed, readBody } from '../../_lib/http';
+import { getUser } from '../../_lib/auth.js';
+import { getAdmin } from '../../_lib/supabaseAdmin.js';
+import { rpInfo, bytesToB64url } from '../../_lib/webauthn.js';
+import { sendError, sendJson, methodNotAllowed, readBody } from '../../_lib/http.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;

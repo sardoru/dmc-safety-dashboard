@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
-import { brandedAuthEmail, sendEmail } from '../_lib/emails';
-import { sendError, sendJson } from '../_lib/http';
+import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
+import { sendError, sendJson } from '../_lib/http.js';
 
 // Supabase delivers the raw request body; we must verify the signature over the
 // exact bytes, so readRawBody() consumes the stream before touching req.body.

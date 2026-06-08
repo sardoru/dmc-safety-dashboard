@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireRole } from './_lib/auth';
-import { sendError, sendJson, methodNotAllowed, readBody } from './_lib/http';
+import { requireRole } from './_lib/auth.js';
+import { sendError, sendJson, methodNotAllowed, readBody } from './_lib/http.js';
 
 /**
  * Tap-to-speak transcription. The client records a short clip and posts it as

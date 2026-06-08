@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireRole } from '../_lib/auth';
-import { getAdmin } from '../_lib/supabaseAdmin';
-import { brandedAuthEmail, sendEmail } from '../_lib/emails';
-import { sendError, sendJson, methodNotAllowed, readBody } from '../_lib/http';
+import { requireRole } from '../_lib/auth.js';
+import { getAdmin } from '../_lib/supabaseAdmin.js';
+import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
+import { sendError, sendJson, methodNotAllowed, readBody } from '../_lib/http.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;

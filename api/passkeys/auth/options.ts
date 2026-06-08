@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
-import { getAdmin } from '../../_lib/supabaseAdmin';
-import { rpInfo } from '../../_lib/webauthn';
-import { sendError, sendJson, methodNotAllowed, readBody } from '../../_lib/http';
+import { getAdmin } from '../../_lib/supabaseAdmin.js';
+import { rpInfo } from '../../_lib/webauthn.js';
+import { sendError, sendJson, methodNotAllowed, readBody } from '../../_lib/http.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
