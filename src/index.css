@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode driven by ThemeContext (.dark on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-navy-50: #E8EBF0;
   --color-navy-100: #C5CCD9;

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { Layers } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAlerts } from '../context/AlertContext';
 import { useProfile } from '../context/ProfileContext';
-import { mockBusinesses } from '../data/mockBusinesses';
+import { useBusinesses } from '../hooks/useBusinesses';
 import { formatRelative } from '../utils/helpers';
 import type { Business, BusinessType } from '../types';
 import 'leaflet/dist/leaflet.css';
@@ -94,6 +94,8 @@ export default function MapView({ flyToRef }: MapViewProps) {
   const { theme } = useTheme();
   const { activeAlerts } = useAlerts();
   const { profile } = useProfile();
+  const businesses = useBusinesses();
+  const otherBusinesses = profile ? businesses.filter((b) => b.id !== profile.id) : businesses;
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [flyTarget, setFlyTarget] = useState<{ center: [number, number]; zoom: number } | null>(null);
   const dark = theme === 'dark';
@@ -143,10 +145,10 @@ export default function MapView({ flyToRef }: MapViewProps) {
         {flyTarget && <FlyTo center={flyTarget.center} zoom={flyTarget.zoom} />}
 
         {/* Business markers */}
-        {mockBusinesses.map(biz => (
+        {otherBusinesses.map(biz => (
           <Marker key={biz.id} position={[biz.lat, biz.lng]} icon={businessIcons[biz.type]}>
             <Popup>
-              <BusinessPopup business={biz} dark={dark} />
+              <BusinessPopup business={biz} />
             </Popup>
           </Marker>
         ))}
@@ -218,7 +220,7 @@ export default function MapView({ flyToRef }: MapViewProps) {
   );
 }
 
-function BusinessPopup({ business, dark }: { business: Business; dark: boolean }) {
+function BusinessPopup({ business }: { business: Business }) {
   return (
     <div className="min-w-[180px]">
       <div className="flex items-center gap-1.5 mb-1">

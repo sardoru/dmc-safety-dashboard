@@ -4,7 +4,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useAlerts } from '../context/AlertContext';
 import { useProfile } from '../context/ProfileContext';
 import { useRadio } from '../context/RadioContext';
-import { mockBusinesses } from '../data/mockBusinesses';
+import { useBusinesses } from '../hooks/useBusinesses';
+import AccountMenu from './AccountMenu';
 import type { RadioHealthResponse } from '../types';
 
 const HEALTH_URL = import.meta.env.VITE_RADIO_HTTP_URL || 'http://localhost:8766';
@@ -131,9 +132,11 @@ export default function Header() {
   const { theme, toggleTheme } = useTheme();
   const { activeAlerts, last24hCount } = useAlerts();
   const { profile } = useProfile();
+  const businesses = useBusinesses();
   const dark = theme === 'dark';
 
-  const businessCount = mockBusinesses.length + (profile ? 1 : 0);
+  const businessCount =
+    businesses.length + (profile && !businesses.some((b) => b.id === profile.id) ? 1 : 0);
 
   return (
     <header
@@ -204,6 +207,7 @@ export default function Header() {
         >
           {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
+        <AccountMenu />
       </div>
     </header>
   );
