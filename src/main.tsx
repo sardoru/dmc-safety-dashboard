@@ -54,14 +54,9 @@ createRoot(document.getElementById('root')!).render(
                         </RequireRole>
                       }
                     />
-                    <Route
-                      path="/"
-                      element={
-                        <RequireAuth>
-                          <App />
-                        </RequireAuth>
-                      }
-                    />
+                    {/* Public dashboard — open to everyone (anonymous + signed-in).
+                        Auth only gates /account, /officer, /admin. */}
+                    <Route path="/" element={<App />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>
