@@ -95,7 +95,7 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Businesses and DMC officers use a secure link or a passkey — no passwords."
+      subtitle="Businesses and public-safety officers use a secure link or a passkey — no passwords."
       footer={
         <Link to="/" className="hover:underline">
           Continue to the public dashboard →
@@ -189,7 +189,7 @@ export default function LoginPage() {
         <InfoLine
           icon={<ShieldCheck className="w-4 h-4 text-gold-500" />}
           dark={dark}
-          text="DMC officers: use the email your administrator invited."
+          text="Public-safety officers: use the email your administrator invited."
         />
       </div>
     </AuthShell>

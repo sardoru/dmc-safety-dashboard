@@ -35,10 +35,10 @@ export default function PortalShell({ title, icon, eyebrow, actions, children }:
           </div>
           <div className="min-w-0">
             <h1 className={`fluid-text-base font-bold leading-tight ${dark ? 'text-gold-400' : 'text-navy-600'}`}>
-              DMC Safety
+              Core Downtown Memphis
             </h1>
             <p className={`fluid-text-xs hidden sm:block ${dark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-              Downtown Memphis Commission
+              Safety Dashboard
             </p>
           </div>
         </Link>

@@ -66,30 +66,30 @@ function buildEmail(actionType: string, email: string, url: string) {
   switch (actionType) {
     case 'recovery':
       return brandedAuthEmail({
-        subject: 'Reset access to DMC Safety Dashboard',
+        subject: 'Reset access to Core Downtown Memphis Safety Dashboard',
         heading: 'Reset your access',
-        preview: 'Securely reset access to the DMC Safety Dashboard.',
-        intro: 'Use the button below to reset access to your DMC Safety Dashboard account.',
+        preview: 'Securely reset access to the Core Downtown Memphis Safety Dashboard.',
+        intro: 'Use the button below to reset access to your Core Downtown Memphis Safety Dashboard account.',
         buttonLabel: 'Reset access',
         url,
       });
     case 'invite':
       return brandedAuthEmail({
-        subject: 'You’re invited to the DMC Safety Dashboard',
+        subject: 'You’re invited to the Core Downtown Memphis Safety Dashboard',
         heading: 'You’ve been invited',
-        preview: 'Accept your invitation to the DMC Safety Dashboard.',
+        preview: 'Accept your invitation to the Core Downtown Memphis Safety Dashboard.',
         intro:
-          'You’ve been invited to join the Downtown Memphis Commission Safety Dashboard. Accept your invitation to get started.',
+          'You’ve been invited to join the Core Downtown Memphis Safety Dashboard. Accept your invitation to get started.',
         buttonLabel: 'Accept invitation',
         url,
         footnote: `This invitation is for ${email}.`,
       });
     case 'email_change':
       return brandedAuthEmail({
-        subject: 'Confirm your new email · DMC Safety',
+        subject: 'Confirm your new email · Core Downtown Memphis Safety',
         heading: 'Confirm your email change',
-        preview: 'Confirm your new email for the DMC Safety Dashboard.',
-        intro: 'Confirm this address to finish updating the email on your DMC Safety account.',
+        preview: 'Confirm your new email for the Core Downtown Memphis Safety Dashboard.',
+        intro: 'Confirm this address to finish updating the email on your Core Downtown Memphis Safety account.',
         buttonLabel: 'Confirm email',
         url,
       });
@@ -98,11 +98,11 @@ function buildEmail(actionType: string, email: string, url: string) {
     case 'email':
     default:
       return brandedAuthEmail({
-        subject: 'Your DMC Safety sign-in link',
-        heading: 'Sign in to DMC Safety',
-        preview: 'Your secure sign-in link for the DMC Safety Dashboard.',
+        subject: 'Your Core Downtown Memphis Safety sign-in link',
+        heading: 'Sign in to Core Downtown Memphis Safety',
+        preview: 'Your secure sign-in link for the Core Downtown Memphis Safety Dashboard.',
         intro:
-          'Tap the button below to securely sign in to the DMC Safety Dashboard. No password required.',
+          'Tap the button below to securely sign in to the Core Downtown Memphis Safety Dashboard. No password required.',
         buttonLabel: 'Sign in',
         url,
         footnote: `This link signs you in as ${email}.`,

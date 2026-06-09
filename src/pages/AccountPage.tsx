@@ -9,7 +9,7 @@ import type { Role } from '../types';
 
 const roleLabel: Record<Role, string> = {
   business: 'Business',
-  officer: 'DMC Officer',
+  officer: 'Public Safety',
   admin: 'Administrator',
 };
 

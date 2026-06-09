@@ -34,7 +34,7 @@ export function NotConfiguredNotice() {
         <p className="fluid-text-sm">
           Add <code className="font-mono">VITE_SUPABASE_URL</code> and{' '}
           <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> (plus the server keys) to enable
-          sign-in, business accounts, and the DMC officer tools.
+          sign-in, business accounts, and the public-safety officer tools.
         </p>
       </div>
     </AuthShell>
@@ -45,7 +45,7 @@ export function UnauthorizedNotice() {
   return (
     <AuthShell
       title="Officer access required"
-      subtitle="This area is limited to DMC safety officers. Ask an administrator to invite your email."
+      subtitle="This area is limited to public-safety officers. Ask an administrator to invite your email."
       footer={
         <Link to="/" className="inline-flex items-center gap-1.5 hover:underline">
           <ArrowLeft className="w-4 h-4" /> Back to the dashboard

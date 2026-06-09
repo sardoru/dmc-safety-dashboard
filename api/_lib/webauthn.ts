@@ -13,7 +13,7 @@ export function rpInfo(req: VercelRequest): RpInfo {
   const proto = ((req.headers['x-forwarded-proto'] as string) || 'https').split(',')[0].trim();
   const rpID = process.env.RP_ID || host.split(':')[0] || 'localhost';
   const origin = process.env.RP_ORIGIN || `${proto}://${host}`;
-  return { rpID, rpName: 'DMC Safety Dashboard', origin };
+  return { rpID, rpName: 'Core Downtown Memphis Safety Dashboard', origin };
 }
 
 export function bytesToB64url(bytes: Uint8Array): string {

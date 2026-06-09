@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 const contacts = [
   { name: 'MPD Emergency', number: '911', tel: '911', priority: true },
   { name: 'MPD Non-Emergency', number: '(901) 545-2677', tel: '+19015452677' },
-  { name: 'DMC Security', number: '(901) 575-0540', tel: '+19015750540' },
+  { name: 'Downtown Security', number: '(901) 575-0540', tel: '+19015750540' },
   { name: 'Fire Department', number: '(901) 320-5507', tel: '+19013205507' },
   { name: 'Crisis Text Line', number: 'Text HOME to 741741', tel: 'sms:741741&body=HOME', isText: true },
 ];

@@ -55,7 +55,7 @@ function reportToAlert(r: Report): Alert {
   return {
     id: r.id,
     businessId: r.business_id || r.reporter_id || '',
-    businessName: r.business_name || (r.source === 'officer' ? 'DMC Officer' : 'Downtown report'),
+    businessName: r.business_name || (r.source === 'officer' ? 'Public Safety' : 'Downtown report'),
     address: r.address || '',
     incidentType: r.incident_type as IncidentType,
     description: r.description,
@@ -183,7 +183,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
           id: generateId(),
           businessId: input.businessId || '',
           businessName:
-            input.businessName || (input.source === 'officer' ? 'DMC Officer' : 'You'),
+            input.businessName || (input.source === 'officer' ? 'Public Safety' : 'You'),
           address: input.address || '',
           incidentType: input.incidentType,
           description: input.description,

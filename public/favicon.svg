@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="DMC Safety Dashboard">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26406b"/>
+      <stop offset="1" stop-color="#111a33"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e7cd8c"/>
+      <stop offset="0.55" stop-color="#c5a55a"/>
+      <stop offset="1" stop-color="#b08e44"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect x="1.75" y="1.75" width="60.5" height="60.5" rx="13.25" fill="none" stroke="#c5a55a" stroke-opacity="0.30" stroke-width="1.5"/>
+  <path d="M19 15.5 L45 15.5 Q47 15.5 47 18 L47 33 Q47 43.5 32 50.5 Q17 43.5 17 33 L17 18 Q17 15.5 19 15.5 Z" fill="url(#shield)"/>
+  <path d="M24.5 32.6 L29.8 38 L40 26.4" fill="none" stroke="#13203a" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -28,7 +28,7 @@ interface AuthEmailOpts {
 
 /**
  * A polished, email-client-safe (table + inline-CSS) branded message in the
- * DMC navy/gold identity. Used for magic links and officer invitations.
+ * navy/gold identity. Used for magic links and officer invitations.
  */
 export function brandedAuthEmail(opts: AuthEmailOpts): BrandedEmail {
   const { heading, preview, intro, buttonLabel, url, footnote, subject } = opts;
@@ -57,8 +57,8 @@ export function brandedAuthEmail(opts: AuthEmailOpts): BrandedEmail {
                   <div style="width:40px;height:40px;background:${NAVY_DARK};border:1px solid rgba(197,165,90,0.5);border-radius:10px;text-align:center;line-height:40px;font-size:20px;">🛡️</div>
                 </td>
                 <td style="vertical-align:middle;">
-                  <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;font-size:17px;font-weight:700;letter-spacing:0.2px;">DMC Safety Dashboard</div>
-                  <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${GOLD};font-size:12px;font-weight:600;letter-spacing:0.4px;">DOWNTOWN MEMPHIS COMMISSION</div>
+                  <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;font-size:17px;font-weight:700;letter-spacing:0.2px;">Core Downtown Memphis</div>
+                  <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${GOLD};font-size:11px;font-weight:600;letter-spacing:0.32em;">SAFETY DASHBOARD</div>
                 </td>
               </tr>
             </table>
@@ -99,7 +99,7 @@ export function brandedAuthEmail(opts: AuthEmailOpts): BrandedEmail {
         <tr>
           <td style="background:${CARD};border:1px solid ${BORDER};border-top:none;border-radius:0 0 16px 16px;padding:22px 28px;">
             <p style="margin:0 0 6px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${MUTED};font-size:12px;line-height:1.6;">🔒 For your security, this link expires in 60 minutes and can be used once. If you didn’t request it, you can safely ignore this email — no action will be taken.</p>
-            <p style="margin:10px 0 0;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#9ca3af;font-size:11px;">DMC Safety Dashboard · Downtown Memphis Commission · Memphis, TN</p>
+            <p style="margin:10px 0 0;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#9ca3af;font-size:11px;">Core Downtown Memphis Safety Dashboard · Memphis, TN</p>
           </td>
         </tr>
 
@@ -118,7 +118,7 @@ ${buttonLabel}: ${url}
 
 ${footnote ? footnote + '\n\n' : ''}For your security, this link expires in 60 minutes and can be used once. If you didn’t request it, ignore this email.
 
-DMC Safety Dashboard · Downtown Memphis Commission`;
+Core Downtown Memphis Safety Dashboard`;
 
   return { subject, html, text };
 }
@@ -133,7 +133,7 @@ function getResend(): Resend {
 }
 
 export async function sendEmail(to: string, email: BrandedEmail): Promise<void> {
-  const from = process.env.EMAIL_FROM || 'DMC Safety <onboarding@resend.dev>';
+  const from = process.env.EMAIL_FROM || 'Core Downtown Memphis Safety <onboarding@resend.dev>';
   const { error } = await getResend().emails.send({
     from,
     to,

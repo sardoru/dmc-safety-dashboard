@@ -51,10 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sendEmail(
         email,
         brandedAuthEmail({
-          subject: 'Your DMC Safety officer access is ready',
-          heading: 'You’re now a DMC officer',
-          preview: 'Officer access to the DMC Safety Dashboard has been granted.',
-          intro: `You’ve been granted ${role === 'admin' ? 'administrator' : 'officer'} access to the DMC Safety Dashboard. Sign in to start filing reports.`,
+          subject: 'Your Public Safety officer access is ready',
+          heading: 'You’re now a Public Safety officer',
+          preview: 'Officer access to the Core Downtown Memphis Safety Dashboard has been granted.',
+          intro: `You’ve been granted ${role === 'admin' ? 'administrator' : 'officer'} access to the Core Downtown Memphis Safety Dashboard. Sign in to start filing reports.`,
           buttonLabel: 'Sign in',
           url,
           footnote: `Access granted for ${email}.`,
@@ -83,10 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await sendEmail(
       email,
       brandedAuthEmail({
-        subject: 'You’re invited to the DMC Safety Dashboard',
+        subject: 'You’re invited to the Core Downtown Memphis Safety Dashboard',
         heading: 'You’ve been invited',
-        preview: 'Accept your DMC Safety officer invitation.',
-        intro: `The Downtown Memphis Commission has invited you to join the Safety Dashboard as ${role === 'admin' ? 'an administrator' : 'a safety officer'}. Accept to set up your account.`,
+        preview: 'Accept your Public Safety officer invitation.',
+        intro: `You have been invited to join the Core Downtown Memphis Safety Dashboard as ${role === 'admin' ? 'an administrator' : 'a safety officer'}. Accept to set up your account.`,
         buttonLabel: 'Accept invitation',
         url,
         footnote: `This invitation is for ${email}.`,

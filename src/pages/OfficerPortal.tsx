@@ -76,7 +76,7 @@ export default function OfficerPortal() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const officerName = officerProfile?.display_name || 'DMC Officer';
+  const officerName = officerProfile?.display_name || 'Public Safety';
 
   const appendTranscript = (text: string) =>
     setTranscript((prev) => (prev ? `${prev} ${text}` : text));
@@ -145,7 +145,7 @@ export default function OfficerPortal() {
 
   if (submitted) {
     return (
-      <PortalShell title="Report filed" eyebrow="DMC Safety Officer" icon={<Radio className="w-6 h-6" />}>
+      <PortalShell title="Report filed" eyebrow="Public Safety Officer" icon={<Radio className="w-6 h-6" />}>
         <div className={`rounded-2xl p-8 text-center ${dark ? 'bg-neutral-900 border border-white/10' : 'bg-white shadow-sm border border-neutral-100'}`}>
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center">
             <CheckCircle2 className="w-8 h-8 text-green-500" />
@@ -176,7 +176,7 @@ export default function OfficerPortal() {
   return (
     <PortalShell
       title="Report suspicious activity"
-      eyebrow="DMC Safety Officer"
+      eyebrow="Public Safety Officer"
       icon={<Radio className="w-6 h-6" />}
     >
       <div className="grid gap-5 lg:grid-cols-2">

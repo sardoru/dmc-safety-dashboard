@@ -101,7 +101,7 @@ export const mockAlerts: Alert[] = [
     businessName: 'Rum Boogie Cafe',
     address: '182 Beale St',
     incidentType: 'Noise Disturbance',
-    description: 'Altercation between patrons on sidewalk. Verbal only so far but escalating. DMC security requested.',
+    description: 'Altercation between patrons on sidewalk. Verbal only so far but escalating. Downtown security requested.',
     timestamp: now - 1.5 * HOUR,
     status: 'active',
     lat: 35.1395,
