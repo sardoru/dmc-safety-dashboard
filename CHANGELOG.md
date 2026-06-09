@@ -1,7 +1,27 @@
 # Changelog
 
-All notable changes to the DMC Safety Dashboard. Format follows
+All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
+
+## [0.2.0] — 2026-06-09 — Rebrand + branded identity 🛡️
+
+Renamed to **Core Downtown Memphis Safety Dashboard** and gave it a real visual identity.
+
+### Changed
+- **Rebrand → "Core Downtown Memphis Safety Dashboard."** Renamed across UI, emails,
+  API, and `<title>` (25 files). **Removed every "Downtown Memphis Commission" mention**;
+  **"DMC Officer" → "Public Safety"** (report source + role labels); the header now reads
+  **Core Downtown Memphis** / *Safety Dashboard*. Updated the `EMAIL_FROM` sender name.
+  (Repo, URL, and Supabase project keep their `dmc-` infra names for link stability.)
+- **Map basemap → CARTO Voyager** (light) + **Dark Matter** (dark) with retina
+  (`detectRetina`) tiles — replaces the raw, dated OpenStreetMap raster. Both are
+  OSM-based, free, no API key.
+
+### Added
+- **Branded favicon** — a navy/gold shield-check (`favicon.svg` + 16/32 PNG +
+  multi-res `.ico` + 180px `apple-touch-icon`), replacing the default Vite logo.
+- **Custom 1200×630 OG image** (`public/og-image.png`) for link previews, with full
+  **Open Graph + Twitter `summary_large_image`** meta + `theme-color` in `index.html`.
 
 ## [0.1.0] — 2026-06-08 — Production launch 🚀
 

@@ -1,6 +1,6 @@
 # Core Downtown Memphis Safety Dashboard
 
-Real-time safety monitoring for **Downtown Memphis** businesses and public-safety officers — a live incident map, police-scanner audio + transcription feed, business accounts, and a voice-first officer reporting portal.
+Real-time public-safety operations for **Downtown Memphis** businesses and officers — a live incident map, an **inline** police scanner, a real-time **Activity Feed** of submitted reports, business accounts, and a voice-first officer reporting portal.
 
 **Live:** https://dmc-safety-dashboard.vercel.app
 
@@ -13,7 +13,7 @@ Real-time safety monitoring for **Downtown Memphis** businesses and public-safet
 | **Businesses** | Create an account, register their storefront, see a live downtown incident map + alert history, get proximity push notifications, and tap **Call for Help** to broadcast an incident. |
 | **Public Safety Officers** | An officer-only portal to file suspicious-activity reports by **GPT Realtime voice-to-voice** conversation **or** **tap-to-speak** transcription, drop a **map pin** on the exact location, and push it live to every connected business. |
 | **Administrators** | Invite officers (branded email), manage officer roles, and see businesses, officers, pending invites, and 24h report volume. |
-| **Everyone** | Live **City of Memphis Police** scanner (Broadcastify feed 215) audio + the existing radio transcription feed, light/dark, fully responsive. |
+| **Everyone** | A public dashboard — the live downtown map (CARTO Voyager), the **inline** Memphis PD scanner (Broadcastify feed 215), and a real-time **Activity Feed** of submitted reports (merged with live scanner transcriptions when the bridge is connected). Light/dark, fully responsive. |
 
 ### Authentication
 - **Passwordless magic links** (Supabase Auth) with **branded HTML emails** sent through **Resend** via a Supabase *Send Email* hook.
