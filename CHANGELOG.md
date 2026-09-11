@@ -3,6 +3,49 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [Unreleased] — Voice on OpenAI GPT-Live-1 (raw full duplex) 🎙️
+
+The officer voice report moved from OpenAI Realtime (`gpt-realtime`) to the new **Live API**
+(`gpt-live-1`) — a transport migration, not a model swap.
+
+### Changed
+- **`/api/live-session` replaces `/api/realtime/session`.** The browser now POSTs its WebRTC
+  SDP offer to our function, which creates the GPT-Live session with the project key
+  (`POST /v1/live/sessions`) and returns `{ sdp, sessionId, opening }` — the browser never
+  talks to OpenAI directly and no ephemeral token exists any more. Errors: missing key → 503,
+  bad/absent offer → 400, OpenAI upstream failure → 502; officer/admin role guard unchanged.
+- **Raw full duplex.** The mic stays open for the whole call; the officer interrupts by talking
+  and a loudspeaker's echo is left to the browser's echo canceller + the model. The assistant
+  still **speaks first** via the GPT-Live greeting recipe (`session.instructions.append` →
+  `session.commentary.append` after `session.started`).
+- **Prompt split** into a live prompt (persona, pacing, backchannel / interruption / silence /
+  delegation policy), a backend prompt (report rules, field normalisation, the tool workflow)
+  and the opening script. The `file_suspicious_report` tool now lives on the Responses backend
+  (`delegation.responses.tools`, `gpt-5.6-terra`, reasoning effort `low`); its call arrives on
+  the `oai-events` data channel and the browser answers it (`response.item.create` +
+  `response.create`) while filling the draft — the old client never returned a tool result.
+- **Transcripts** are stitched from GPT-Live's timed word pieces (verbatim concatenation, rows
+  split by a 2.5 s timeline gap); the "Assistant speaking…" readout is an `AnalyserNode` level
+  meter on the remote track (no output-audio events exist over WebRTC).
+- `src/lib/realtime.ts` → `src/lib/live.ts` (`LiveSession`); `VoiceReportRealtime` →
+  `VoiceReportLive`. Ending a call sends `session.close` and waits (≤1.5 s) for `session.closed`.
+
+### Removed
+- Server-VAD tuning, input-transcription config, the mobile half-duplex mic gate and its
+  "use earbuds" tip, the `response.create` greeting kick-off, and `OPENAI_REALTIME_MODEL`.
+
+### Added
+- Optional env overrides `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_VOICE`, `OPENAI_LIVE_BACKEND_MODEL`,
+  `OPENAI_LIVE_BACKEND_EFFORT` (defaults `gpt-live-1` / `marin` / `gpt-5.6-terra` / `low`) —
+  nothing has to change in Vercel for the defaults.
+
+### Verified
+- `tsc` (app + api), eslint, `npm run build`; a Node harness calling the function with a real
+  headless-Chromium SDP offer (200 + SDP answer, 405/401/400/503 paths); and a full headless call
+  through the built `/officer` page with a fake microphone: greeting first, officer transcript,
+  `file_suspicious_report` round-trip that auto-filled the draft, spoken confirmation,
+  `session.closed` with usage, no `error` events.
+
 ## [0.2.0] — 2026-06-09 — Rebrand + branded identity 🛡️
 
 Renamed to **Core Downtown Memphis Safety Dashboard** and gave it a real visual identity.
