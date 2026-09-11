@@ -17,14 +17,14 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import PortalShell from '../components/PortalShell';
-import VoiceReportRealtime from '../components/officer/VoiceReportRealtime';
+import VoiceReportLive from '../components/officer/VoiceReportLive';
 import QuickReportSpeech, { type QuickResult } from '../components/officer/QuickReportSpeech';
 import ReportPinMap, { type PinValue } from '../components/officer/ReportPinMap';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useAlerts } from '../context/AlertContext';
 import { formatRelative } from '../utils/helpers';
-import type { CapturedReport } from '../lib/realtime';
+import type { CapturedReport } from '../lib/live';
 import type { IncidentType } from '../types';
 
 const INCIDENT_OPTIONS: { type: IncidentType; icon: React.ReactNode; color: string }[] = [
@@ -189,7 +189,7 @@ export default function OfficerPortal() {
 
           <div className="py-4">
             {mode === 'voice' ? (
-              <VoiceReportRealtime onUserTranscript={appendTranscript} onReport={handleCaptured} />
+              <VoiceReportLive onUserTranscript={appendTranscript} onReport={handleCaptured} />
             ) : (
               <QuickReportSpeech onResult={handleQuick} />
             )}

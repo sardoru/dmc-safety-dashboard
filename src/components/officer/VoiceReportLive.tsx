@@ -1,25 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Loader2, Volume2, AudioLines } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { RealtimeSession, type RealtimeStatus, type CapturedReport } from '../../lib/realtime';
+import { LiveSession, type LiveStatus, type CapturedReport } from '../../lib/live';
 
 interface Props {
   onUserTranscript: (text: string) => void;
   onReport: (report: CapturedReport) => void;
 }
 
-export default function VoiceReportRealtime({ onUserTranscript, onReport }: Props) {
+/**
+ * Hands-free voice report on GPT-Live: one tap opens a full-duplex call — the
+ * assistant greets first, the officer talks whenever they like (interrupting
+ * included), and the backend's `file_suspicious_report` fills the draft.
+ */
+export default function VoiceReportLive({ onUserTranscript, onReport }: Props) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const [status, setStatus] = useState<RealtimeStatus>('idle');
+  const [status, setStatus] = useState<LiveStatus>('idle');
   const [speaking, setSpeaking] = useState(false);
   const [assistantLine, setAssistantLine] = useState('');
   const [error, setError] = useState('');
-  const sessionRef = useRef<RealtimeSession | null>(null);
+  const sessionRef = useRef<LiveSession | null>(null);
 
   useEffect(() => {
     return () => {
-      sessionRef.current?.stop();
+      void sessionRef.current?.stop();
       sessionRef.current = null;
     };
   }, []);
@@ -27,7 +32,7 @@ export default function VoiceReportRealtime({ onUserTranscript, onReport }: Prop
   const connect = async () => {
     setError('');
     setAssistantLine('');
-    const session = new RealtimeSession({
+    const session = new LiveSession({
       onStatus: setStatus,
       onSpeakingChange: setSpeaking,
       onUserTranscript,
@@ -40,7 +45,7 @@ export default function VoiceReportRealtime({ onUserTranscript, onReport }: Prop
   };
 
   const disconnect = () => {
-    sessionRef.current?.stop();
+    void sessionRef.current?.stop();
     sessionRef.current = null;
     setSpeaking(false);
     setAssistantLine('');
@@ -102,12 +107,6 @@ export default function VoiceReportRealtime({ onUserTranscript, onReport }: Prop
           className={`mt-1 fluid-text-sm italic max-w-md ${dark ? 'text-neutral-400' : 'text-neutral-500'}`}
         >
           “{assistantLine}”
-        </p>
-      )}
-
-      {sessionRef.current?.isMobile && connected && (
-        <p className={`mt-2 fluid-text-xs ${dark ? 'text-neutral-600' : 'text-neutral-400'}`}>
-          Tip: use earbuds for the smoothest back-and-forth.
         </p>
       )}
 

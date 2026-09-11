@@ -11,7 +11,7 @@ Real-time public-safety operations for **Downtown Memphis** businesses and offic
 | Audience | Capabilities |
 | --- | --- |
 | **Businesses** | Create an account, register their storefront, see a live downtown incident map + alert history, get proximity push notifications, and tap **Call for Help** to broadcast an incident. |
-| **Public Safety Officers** | An officer-only portal to file suspicious-activity reports by **GPT Realtime voice-to-voice** conversation **or** **tap-to-speak** transcription, drop a **map pin** on the exact location, and push it live to every connected business. |
+| **Public Safety Officers** | An officer-only portal to file suspicious-activity reports by a **GPT-Live voice-to-voice** call (full duplex — the assistant speaks first, the officer just talks and can interrupt) **or** **tap-to-speak** transcription, drop a **map pin** on the exact location, and push it live to every connected business. |
 | **Administrators** | Invite officers (branded email), manage officer roles, and see businesses, officers, pending invites, and 24h report volume. |
 | **Everyone** | A public dashboard — the live downtown map (CARTO Voyager), the **inline** Memphis PD scanner (Broadcastify feed 215), and a real-time **Activity Feed** of submitted reports (merged with live scanner transcriptions when the bridge is connected). Light/dark, fully responsive. |
 
@@ -55,7 +55,9 @@ The app **degrades gracefully**. With no Supabase env vars set it runs exactly l
    - The hook verifies the Standard-Webhooks signature, renders the navy/gold template in [`api/_lib/emails.ts`](./api/_lib/emails.ts), and sends via Resend. With the hook enabled, Supabase's built-in SMTP is bypassed entirely.
 
 ### 3. OpenAI (voice + transcription)
-- `OPENAI_API_KEY` — used by `/api/realtime/session` (ephemeral token for the **gpt-realtime** WebRTC voice session), `/api/transcribe` (tap-to-speak), and `/api/reports/extract` (structuring transcripts).
+- `OPENAI_API_KEY` — used by `/api/live-session` (the **gpt-live-1** voice call), `/api/transcribe` (tap-to-speak), and `/api/reports/extract` (structuring transcripts).
+- **How the voice call works.** The browser opens a WebRTC peer connection and POSTs its SDP offer to `/api/live-session`; the function creates the GPT-Live session with the project key (persona, voice, the Responses backend it delegates to, the `file_suspicious_report` tool) and returns the SDP answer — the browser never talks to OpenAI directly. GPT-Live is **full duplex**: there is no turn detection, mic gating or echo mode to tune — the mic stays open for the whole call and the officer interrupts by talking. After `session.started` the browser sends the greeting recipe (`session.instructions.append` → `session.commentary.append`) so the assistant speaks first. The report tool lives on the Responses backend (`delegation.responses.tools`); its call arrives on the `oai-events` data channel and the browser answers it (`response.item.create` + `response.create`) while filling the draft.
+- `OPENAI_LIVE_MODEL` (default `gpt-live-1`), `OPENAI_LIVE_VOICE` (default `marin`), `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-5.6-terra`; `gpt-5.6-luna` is the cost-saver) and `OPENAI_LIVE_BACKEND_EFFORT` (default `low`) are optional overrides.
 
 ### 4. Environment variables
 Copy [`.env.example`](./.env.example). Client vars (`VITE_…`) go in the build; the rest are **server-only** Vercel env vars.
@@ -68,7 +70,7 @@ Copy [`.env.example`](./.env.example). Client vars (`VITE_…`) go in the build;
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | server | admin DB + session minting |
 | `SITE_URL` | server | WebAuthn + email links |
 | `ADMIN_EMAILS` | server | _documented but not wired in code_ — `admin` comes from the `officer_invites` seed in `0001_init.sql` + the `handle_new_user` trigger |
-| `OPENAI_API_KEY`, `OPENAI_REALTIME_MODEL`, `OPENAI_TRANSCRIBE_MODEL` | server | voice + transcription |
+| `OPENAI_API_KEY`, `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_VOICE`, `OPENAI_LIVE_BACKEND_MODEL`, `OPENAI_LIVE_BACKEND_EFFORT`, `OPENAI_TRANSCRIBE_MODEL` | server | voice (GPT-Live) + transcription |
 | `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails |
 | `SEND_EMAIL_HOOK_SECRET` | server | verify Supabase email hook |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying-party (defaults to request host) |
@@ -113,7 +115,7 @@ vercel dev           # serves the SPA + /api functions together
 api/                         Vercel serverless functions
   _lib/                      auth, supabase admin, emails, webauthn, http helpers
   auth/email-hook.ts         Supabase Send-Email hook → Resend (branded)
-  realtime/session.ts        OpenAI Realtime ephemeral token
+  live-session.ts            GPT-Live session from the browser's WebRTC offer (+ report tool)
   transcribe.ts              tap-to-speak → OpenAI transcription
   reports/extract.ts         transcript → structured report
   officers/invite.ts         admin invites an officer
@@ -121,9 +123,9 @@ api/                         Vercel serverless functions
 src/
   context/                   Auth, Profile, Alert (reports), Radio, Theme
   pages/                     LoginPage, AuthCallback, AccountPage, Officer/Admin portals
-  components/                Dashboard UI, PoliceScanner, PasskeyManager, auth guards, officer/*
+  components/                Dashboard UI, PoliceScanner, PasskeyManager, auth guards, officer/* (VoiceReportLive)
   hooks/useBusinesses.ts     businesses (DB when connected, mock in demo)
-  lib/                       supabase, api, passkeys, realtime clients
+  lib/                       supabase, api, passkeys, live (GPT-Live call) clients
 supabase/migrations/         schema + RLS
 ```
 
