@@ -9,6 +9,17 @@ A full review of 0.3.0 (API/RLS security, frontend correctness, voice integratio
 went live. **Needs migration `0003_write_guards.sql`** (safe to run more than once; tested
 against production in a rolled-back transaction — 15/15 scenarios).
 
+### Added
+- **"How it works" film at `/how-it-works`** — a 5:53 3Blue1Brown-style walkthrough of the
+  Safety Dashboard and the Ops Center (14 chapters, real screens from the demo, narration
+  written ~80% to ASD-STE100, a natural voice, a QR code per chapter, designed cover and end
+  card, OpenStreetMap credited). The page has its own HTML entry so link previews show the
+  video (`og:type` video.other, `og:video`, cover image) and search engines get a
+  `VideoObject` with one `Clip` per chapter; chapters and every transcript sentence are
+  timestamp links, and `?t=` deep links (`89`, `1:29`, `1m29s`) open the film there. The
+  landing page links to it. `scripts/film-data.mjs` brings a new cut in from the film
+  project (`~/videos/dmc-safety-how-it-works`).
+
 ### Security
 - **Passkey sign-in could take over any account, including the admin** (present since the
   June build). `/api/passkeys/auth/verify` minted a session for `profiles.email`, which every

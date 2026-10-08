@@ -193,6 +193,23 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 3. Deploy. [`vercel.json`](./vercel.json) configures the SPA rewrite, function limits,
    image optimization and caching headers.
 
+> This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
+
+---
+
+## "How it works" film
+
+**https://dmc-safety-dashboard.vercel.app/how-it-works** — a 5:53 walkthrough with chapters, a
+clickable transcript and `?t=` deep links (each chapter's QR code in the film opens one).
+
+- The page is its own Vite entry, [`how-it-works.html`](./how-it-works.html) + `src/film/`, so
+  link previews get real video tags without running the app.
+- The film is made in its own project (`~/videos/dmc-safety-how-it-works`, HyperFrames). To bring
+  a new cut in: `node scripts/film-data.mjs ~/videos/dmc-safety-how-it-works/renders` — it copies
+  the web MP4, poster, share image and captions into `public/video/`, regenerates
+  `src/film/filmData.ts` / `filmMeta.ts` and the page's VideoObject, and refuses wording the
+  product doesn't use ("AI", vendor names).
+
 ---
 
 ## Project structure

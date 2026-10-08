@@ -13,9 +13,452 @@ export interface FilmChapter {
 }
 
 export const FILM = {
-  duration: 0,
+  duration: 353.3,
   src: '/video/dmc-safety-how-it-works.mp4',
   poster: '/video/poster.jpg',
   captions: '/video/captions.vtt',
-  chapters: [] as FilmChapter[],
+  chapters: [
+    {
+      "id": "01-a-self-regulated-safety-dashboard",
+      "title": "A self-regulated safety dashboard",
+      "start": 0,
+      "sentences": [
+        {
+          "text": "This film shows how the Core Downtown Memphis Safety Dashboard works.",
+          "start": 0.35
+        },
+        {
+          "text": "This is a self-regulated safety dashboard.",
+          "start": 5.95
+        },
+        {
+          "text": "Downtown businesses and the Downtown public-safety team watch out for each other.",
+          "start": 9.27
+        },
+        {
+          "text": "Members report what they see.",
+          "start": 14.27
+        },
+        {
+          "text": "Officers see each report at once, and respond.",
+          "start": 16.43
+        },
+        {
+          "text": "There are three roles: business owner, officer, and administrator.",
+          "start": 20.11
+        },
+        {
+          "text": "This dashboard is not 911.",
+          "start": 25.47
+        },
+        {
+          "text": "If anyone is in danger, call 911 first.",
+          "start": 28.27
+        }
+      ]
+    },
+    {
+      "id": "02-sign-in-without-a-password",
+      "title": "Sign in without a password",
+      "start": 32.8,
+      "sentences": [
+        {
+          "text": "There are no passwords.",
+          "start": 33.15
+        },
+        {
+          "text": "Type your work email, and select “Email me a sign-in link”.",
+          "start": 35.23
+        },
+        {
+          "text": "Open the email on the same device, and select “Sign in”.",
+          "start": 39.63
+        },
+        {
+          "text": "The link works one time, for one hour.",
+          "start": 43.79
+        },
+        {
+          "text": "On a trusted device, add a passkey.",
+          "start": 46.99
+        },
+        {
+          "text": "Then sign in with Face ID, Touch ID, or your device PIN.",
+          "start": 49.87
+        }
+      ]
+    },
+    {
+      "id": "03-the-business-home-page",
+      "title": "The business home page",
+      "start": 55.6,
+      "sentences": [
+        {
+          "text": "A business starts on its home page.",
+          "start": 55.95
+        },
+        {
+          "text": "Add your storefront, and one tap pins a report to your door.",
+          "start": 58.63
+        },
+        {
+          "text": "“My reports” follows each report that you sent, until it is resolved.",
+          "start": 62.91
+        },
+        {
+          "text": "“Nearby” shows community reports within half a mile, from the last 48 hours.",
+          "start": 67.6
+        },
+        {
+          "text": "The side column shows your block and the lookouts.",
+          "start": 73.31
+        }
+      ]
+    },
+    {
+      "id": "04-report-by-voice",
+      "title": "Report by voice",
+      "start": 77.3,
+      "sentences": [
+        {
+          "text": "You can report by voice, with a guided form, or with a quick alert.",
+          "start": 77.65
+        },
+        {
+          "text": "Select “Report by voice”.",
+          "start": 82.69
+        },
+        {
+          "text": "An automated voice interview asks the questions that officers need.",
+          "start": 85.17
+        },
+        {
+          "text": "Describe what you saw.",
+          "start": 89.57
+        },
+        {
+          "text": "You can interrupt at any time.",
+          "start": 91.45
+        },
+        {
+          "text": "While you talk, the report appears on the same screen.",
+          "start": 93.89
+        },
+        {
+          "text": "Your words stay with it as a transcript.",
+          "start": 97.65
+        }
+      ]
+    },
+    {
+      "id": "05-the-guided-form",
+      "title": "The guided form",
+      "start": 101.1,
+      "sentences": [
+        {
+          "text": "The guided form has five short steps: what, where, when, who, and details.",
+          "start": 101.45
+        },
+        {
+          "text": "Select “Read aloud” to hear each question.",
+          "start": 109.45
+        },
+        {
+          "text": "Describe what people did, their clothing, and which way they went.",
+          "start": 112.89
+        },
+        {
+          "text": "Never describe a person by race alone.",
+          "start": 117.13
+        },
+        {
+          "text": "In the last step, dictate your notes, and select “Organize my notes”.",
+          "start": 120.09
+        },
+        {
+          "text": "It finds the category, the people, and the vehicles.",
+          "start": 124.81
+        }
+      ]
+    },
+    {
+      "id": "06-quick-alert-review-and-send",
+      "title": "Quick alert, review and send",
+      "start": 129.2,
+      "sentences": [
+        {
+          "text": "For something at your door right now, select “Quick alert”.",
+          "start": 129.55
+        },
+        {
+          "text": "Select what is happening, then “Send alert now”.",
+          "start": 133.99
+        },
+        {
+          "text": "It goes out at once.",
+          "start": 137.79
+        },
+        {
+          "text": "Voice reports and forms end on a review page.",
+          "start": 140.11
+        },
+        {
+          "text": "The dashboard suggests a priority, from P1, critical, to P4, low.",
+          "start": 143.63
+        },
+        {
+          "text": "A weapon or an injury makes it P1.",
+          "start": 149.95
+        },
+        {
+          "text": "Choose who sees it: your photos and phone number stay with the officers.",
+          "start": 153.31
+        },
+        {
+          "text": "Then select “Send to officers”.",
+          "start": 158.19
+        }
+      ]
+    },
+    {
+      "id": "07-the-ops-center",
+      "title": "The Ops Center",
+      "start": 161.3,
+      "sentences": [
+        {
+          "text": "Officers work in the Ops Center.",
+          "start": 161.65
+        },
+        {
+          "text": "A new report appears in the queue in seconds.",
+          "start": 164.17
+        },
+        {
+          "text": "The queue sorts by priority.",
+          "start": 167.57
+        },
+        {
+          "text": "In each priority, new reports come first.",
+          "start": 169.97
+        },
+        {
+          "text": "Search, or filter by priority and category.",
+          "start": 173.41
+        },
+        {
+          "text": "The numbers at the top show what is new, what is open, and the median time to acknowledge.",
+          "start": 176.77
+        },
+        {
+          "text": "The live activity stream is on the right.",
+          "start": 182.77
+        }
+      ]
+    },
+    {
+      "id": "08-the-district-map",
+      "title": "The district map",
+      "start": 186.2,
+      "sentences": [
+        {
+          "text": "On the map, each pin is a report, and its color is the priority.",
+          "start": 186.55
+        },
+        {
+          "text": "A ring pulses on a new P1 or P2 report.",
+          "start": 191.83
+        },
+        {
+          "text": "Use the layers menu to show the downtown core, the incident density, the last place each lookout was seen, and the member businesses.",
+          "start": 196.31
+        },
+        {
+          "text": "Select a pin to open the report.",
+          "start": 206.15
+        }
+      ]
+    },
+    {
+      "id": "09-triage-a-report",
+      "title": "Triage a report",
+      "start": 208.7,
+      "sentences": [
+        {
+          "text": "To triage a report, select “Acknowledge”.",
+          "start": 209.05
+        },
+        {
+          "text": "Select “Responding” when you go.",
+          "start": 212.69
+        },
+        {
+          "text": "Then select “Resolve”, and choose the outcome.",
+          "start": 215.05
+        },
+        {
+          "text": "The reporter sees each step.",
+          "start": 218.69
+        },
+        {
+          "text": "Change the priority, or assign the report to yourself.",
+          "start": 221.13
+        },
+        {
+          "text": "An internal note stays with the officers.",
+          "start": 224.89
+        },
+        {
+          "text": "A public note goes to the reporter.",
+          "start": 227.77
+        },
+        {
+          "text": "To warn the block, select BOLO, and publish a lookout.",
+          "start": 230.33
+        }
+      ]
+    },
+    {
+      "id": "10-spoken-alerts-and-shift-briefings",
+      "title": "Spoken alerts and shift briefings",
+      "start": 235.1,
+      "sentences": [
+        {
+          "text": "The dashboard also speaks.",
+          "start": 235.45
+        },
+        {
+          "text": "When a report arrives, officers hear a chime, and a voice reads it aloud.",
+          "start": 238.01
+        },
+        {
+          "text": "Businesses hear the reports near them.",
+          "start": 243.29
+        },
+        {
+          "text": "In Settings, choose which priorities the voice reads.",
+          "start": 246.17
+        },
+        {
+          "text": "Every report and lookout has a “Listen” button.",
+          "start": 250.17
+        },
+        {
+          "text": "Select “Shift briefing” to hear a spoken summary of the last 4, 12, or 24 hours.",
+          "start": 253.61
+        },
+        {
+          "text": "The Memphis Police scanner plays here too.",
+          "start": 260.36
+        }
+      ]
+    },
+    {
+      "id": "11-the-lookout-board",
+      "title": "The Lookout board",
+      "start": 263.8,
+      "sentences": [
+        {
+          "text": "The Lookout board shows people and vehicles tied to recent reports, with a description and the last place seen.",
+          "start": 264.15
+        },
+        {
+          "text": "If you see a match, select “I've seen this”, and pin the place.",
+          "start": 271.56
+        },
+        {
+          "text": "Officers get it at once, as a P2 report.",
+          "start": 276.23
+        },
+        {
+          "text": "Do not approach, follow, or confront anyone.",
+          "start": 279.75
+        },
+        {
+          "text": "Officers extend a lookout, or clear it.",
+          "start": 283.59
+        }
+      ]
+    },
+    {
+      "id": "12-insights",
+      "title": "Insights",
+      "start": 287.4,
+      "sentences": [
+        {
+          "text": "Insights shows the trends for 24 hours, 7 days, or 30 days.",
+          "start": 287.75
+        },
+        {
+          "text": "See the share of high-priority reports, and how fast officers acknowledge and resolve them.",
+          "start": 293.67
+        },
+        {
+          "text": "A heat map shows the busiest hours, and a list shows the hotspots.",
+          "start": 299.83
+        }
+      ]
+    },
+    {
+      "id": "13-manage-the-team",
+      "title": "Manage the team",
+      "start": 305.3,
+      "sentences": [
+        {
+          "text": "Administrators manage the team.",
+          "start": 305.65
+        },
+        {
+          "text": "To add an officer, type the email, select a role, and select “Send invite”.",
+          "start": 308.21
+        },
+        {
+          "text": "The officer gets a sign-in link by email.",
+          "start": 314.13
+        },
+        {
+          "text": "Pending invites wait for the first sign-in.",
+          "start": 317.22
+        },
+        {
+          "text": "The Businesses tab lists the member businesses.",
+          "start": 320.32
+        }
+      ]
+    },
+    {
+      "id": "14-one-day-downtown",
+      "title": "One day downtown",
+      "start": 324.3,
+      "sentences": [
+        {
+          "text": "Here is one day.",
+          "start": 324.65
+        },
+        {
+          "text": "An officer starts the shift with a spoken briefing.",
+          "start": 326.49
+        },
+        {
+          "text": "A business sees something, and reports it in two minutes.",
+          "start": 329.97
+        },
+        {
+          "text": "The officer hears it, finds it on the map, and responds.",
+          "start": 333.85
+        },
+        {
+          "text": "Members report, officers respond, and the community regulates itself.",
+          "start": 338.09
+        },
+        {
+          "text": "Scan the code to open the dashboard.",
+          "start": 343.45
+        },
+        {
+          "text": "If anyone is in danger, call 911 first.",
+          "start": 346.01
+        }
+      ]
+    }
+  ] as FilmChapter[],
 };
