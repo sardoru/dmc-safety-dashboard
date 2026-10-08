@@ -181,7 +181,7 @@ export default function LoginPage() {
               <span className="h-2 w-2 rounded-full bg-emerald-400" /> Live operations map
             </span>
             <span className="inline-flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-gold-400" /> AI voice reporting
+              <span className="h-2 w-2 rounded-full bg-gold-400" /> Voice reporting
             </span>
           </div>
         </div>

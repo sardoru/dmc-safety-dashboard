@@ -3,6 +3,9 @@ import { apiFetch } from '../lib/api';
 
 type DictationState = 'idle' | 'recording' | 'transcribing';
 
+/** Stop and transcribe on our own at 3 minutes (~1.4 MB at 64 kbps), well under the upload limit. */
+const MAX_RECORDING_MS = 3 * 60_000;
+
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -22,6 +25,7 @@ export function useDictation(onText: (text: string) => void) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const capTimer = useRef<number | undefined>(undefined);
   const onTextRef = useRef(onText);
 
   useEffect(() => {
@@ -30,6 +34,7 @@ export function useDictation(onText: (text: string) => void) {
 
   useEffect(
     () => () => {
+      window.clearTimeout(capTimer.current);
       stream.current?.getTracks().forEach((t) => t.stop());
     },
     [],
@@ -64,17 +69,21 @@ export function useDictation(onText: (text: string) => void) {
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : '';
-      const rec = new MediaRecorder(s, mime ? { mimeType: mime } : undefined);
+      const rec = new MediaRecorder(s, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 64_000 });
       chunks.current = [];
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.current.push(e.data);
       };
       rec.onstop = () => {
+        window.clearTimeout(capTimer.current);
         s.getTracks().forEach((t) => t.stop());
         void finish(rec.mimeType);
       };
       recorder.current = rec;
       rec.start();
+      capTimer.current = window.setTimeout(() => {
+        if (rec.state === 'recording') rec.stop();
+      }, MAX_RECORDING_MS);
       setState('recording');
     } catch {
       setError('Microphone access is needed to dictate.');

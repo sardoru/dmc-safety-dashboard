@@ -155,15 +155,17 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       setCaps(found);
 
-      const [{ data: rows }, upd] = await Promise.all([
+      const [reports, upd] = await Promise.all([
         supabase.from('reports').select('*').order('created_at', { ascending: false }).limit(500),
         found.updates
           ? supabase.from('report_updates').select('*').order('created_at', { ascending: false }).limit(600)
-          : Promise.resolve({ data: [] as UpdateRow[] }),
+          : Promise.resolve({ data: [] as UpdateRow[], error: null }),
       ]);
       if (!active) return;
-      setIncidents(sortIncidents((rows ?? []).map((r) => rowToIncident(r as ReportRow))));
-      setUpdates(groupUpdates(((upd.data ?? []) as UpdateRow[]).map(rowToUpdate)));
+      // A failed read keeps what is on screen rather than showing "all clear".
+      if (reports.error) throw reports.error;
+      setIncidents(sortIncidents((reports.data ?? []).map((r) => rowToIncident(r as ReportRow))));
+      if (!upd.error) setUpdates(groupUpdates(((upd.data ?? []) as UpdateRow[]).map(rowToUpdate)));
       setLoadedFor(user.id);
     })().catch((err) => {
       console.error('[incidents] load failed', err);
@@ -234,9 +236,20 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /** Write a timeline entry (connected: report_updates; demo: local). */
+  /**
+   * Write a timeline entry (connected: report_updates; demo: local). Side
+   * entries (status, assignment…) only log a failure; `strict` throws it, for
+   * writes the user typed and must not lose (notes).
+   */
   const recordUpdate = useCallback(
-    async (incidentId: string, kind: UpdateKind, body: string, internal = false, meta?: Record<string, unknown>) => {
+    async (
+      incidentId: string,
+      kind: UpdateKind,
+      body: string,
+      internal = false,
+      meta?: Record<string, unknown>,
+      strict = false,
+    ) => {
       const me = meRef.current;
       const local: IncidentUpdate = {
         id: generateId(),
@@ -270,6 +283,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
         .select()
         .single();
       if (error) {
+        if (strict) throw new Error(error.message);
         console.warn('[incidents] timeline write failed', error);
         return;
       }
@@ -355,6 +369,13 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
         return inc;
       }
 
+      // Don't file before the schema check finishes: an unchecked session
+      // would write the legacy row shape and drop visibility and photos.
+      if (!capsRef.current.checked) {
+        const found = await detectSchema();
+        capsRef.current = found;
+        setCaps(found);
+      }
       let v2 = capsRef.current.v2;
       // Photos are a bonus: if they can't upload, the report still goes through.
       let photos: string[] = [];
@@ -481,7 +502,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
       const text = body.trim();
       if (!text) return;
       if (!demo && !capsRef.current.updates) throw new Error('Notes need database migration 0002.');
-      await recordUpdate(id, 'note', text, internal);
+      await recordUpdate(id, 'note', text, internal, undefined, true);
     },
     [demo, recordUpdate],
   );

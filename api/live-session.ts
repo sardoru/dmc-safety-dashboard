@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireRole, type Role } from './_lib/auth.js';
 import { getAdmin } from './_lib/supabaseAdmin.js';
-import { methodNotAllowed, readBody, sendError, sendJson } from './_lib/http.js';
+import { fetchWithTimeout, isAbortError, methodNotAllowed, readBody, sendError, sendJson } from './_lib/http.js';
 import { CATEGORY_LABELS, PRIORITY_GUIDE, SUBJECT_SCHEMA, VEHICLE_SCHEMA } from './_lib/incidents.js';
 
 /**
@@ -228,7 +228,9 @@ export function liveSessionConfig(ctx: CallerContext) {
         parallel_tool_calls: false,
         reasoning: { effort: backendEffort() },
         text: { verbosity: 'low' },
-        max_output_tokens: 500,
+        // Reasoning tokens count against this, and a full file_incident_report
+        // call (people + vehicles) needs room — 500 could cut the call off.
+        max_output_tokens: 1200,
       },
     },
     client: { data_channel: { allowed_client_events: CLIENT_EVENTS_ALLOWED } },
@@ -287,15 +289,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ctx = await callerContext(guard.user.id, guard.user.role);
 
   try {
-    const resp = await fetch(LIVE_SESSIONS_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'OpenAI-Safety-Identifier': guard.user.id,
+    const resp = await fetchWithTimeout(
+      LIVE_SESSIONS_URL,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'OpenAI-Safety-Identifier': guard.user.id,
+        },
+        body: JSON.stringify({ session: liveSessionConfig(ctx), transport: { type: 'webrtc', sdp } }),
       },
-      body: JSON.stringify({ session: liveSessionConfig(ctx), transport: { type: 'webrtc', sdp } }),
-    });
+      15_000,
+    );
 
     const data = (await resp.json().catch(() => ({}))) as LiveCreateResponse;
     if (!resp.ok) {
@@ -316,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tool: REPORT_TOOL_NAME,
     });
   } catch (err) {
+    if (isAbortError(err)) return sendError(res, 504, 'The voice service took too long to answer — try again');
     return sendError(res, 502, err instanceof Error ? err.message : 'Could not reach OpenAI');
   }
 }

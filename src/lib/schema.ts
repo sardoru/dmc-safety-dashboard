@@ -42,8 +42,11 @@ export async function detectSchema(): Promise<SchemaCaps> {
   };
 }
 
-/** True when a write failed because the database is still on the old schema. */
+/**
+ * True when a write failed because the database is still on the old schema.
+ * A check violation (23514) is NOT one: on the old schema the new columns are
+ * missing, which fails first, so a 23514 means a bad value on the new schema.
+ */
 export function isSchemaError(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return missing(error) || error.code === '23514'; // check_violation (old status / kind vocab)
+  return missing(error);
 }

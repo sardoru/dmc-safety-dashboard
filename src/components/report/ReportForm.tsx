@@ -19,7 +19,7 @@ import CategoryGrid from './CategoryGrid';
 import EmergencyCallout from './EmergencyCallout';
 import PeopleEditor from './PeopleEditor';
 import PhotoPicker from './PhotoPicker';
-import { isEmergency, mergeCapture, suggestedTitle, toLocalInput, type ReportDraft } from './draft';
+import { isEmergency, organizeInto, suggestedTitle, toLocalInput, type ReportDraft } from './draft';
 
 type Step = 'what' | 'where' | 'when' | 'who' | 'details';
 
@@ -102,10 +102,13 @@ export default function ReportForm({ draft, setDraft, profile, onReview }: Repor
       let place = draft.place;
       if (!place && r.location_hint) place = await geocode(r.location_hint);
       setDraft((d) => {
-        const merged = mergeCapture(d, { ...r, description: r.description || d.description }, profile);
+        // Without a structured answer (no AI key, unreadable reply) keep
+        // everything the reporter chose; only the text is saved.
+        if (!r.structured) return { ...d, description: r.description || d.description };
+        const merged = organizeInto(d, r);
         return { ...merged, place: d.place ?? place ?? merged.place };
       });
-      push({ title: r.structured ? 'Organized with AI' : 'Saved your description', body: r.structured ? 'Check the category, people and vehicles it found.' : undefined, tone: 'success' });
+      push({ title: r.structured ? 'Organized your notes' : 'Saved your description', body: r.structured ? 'Check the category, people and vehicles it found.' : undefined, tone: 'success' });
     } catch (err) {
       push({ title: 'Couldn’t organize the description', body: err instanceof Error ? err.message : undefined, tone: 'warning' });
     } finally {
@@ -257,7 +260,7 @@ export default function ReportForm({ draft, setDraft, profile, onReview }: Repor
                     )}
                     {!isDemo && (
                       <Button size="sm" variant="ghost" icon={<WandSparkles className="h-4 w-4" />} loading={organizing} disabled={!draft.description.trim()} onClick={() => void organize()}>
-                        Organize with AI
+                        Organize my notes
                       </Button>
                     )}
                     {dictation.error && <span className="text-[12px] text-red-600 dark:text-red-400">{dictation.error}</span>}

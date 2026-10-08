@@ -183,6 +183,8 @@ export class LiveSession {
   private tickTimer: number | null = null;
   private opening: OpeningScript | null = null;
   private openingEventId: string | null = null;
+  /** The caller has started talking — don't greet or nudge over them. */
+  private callerSpoke = false;
   private eventSeq = 0;
   private started = false;
   private stopped = false;
@@ -465,7 +467,7 @@ export class LiveSession {
      nudge to begin. Both lines are written by our server. */
   private sendOpening(): void {
     const op = this.opening;
-    if (!op?.instructions) return;
+    if (!op?.instructions || this.callerSpoke) return;
     const id = this.nextEventId('opening');
     this.openingEventId = id;
     this.send({ type: 'session.instructions.append', delegation_id: null, event_id: id, content: op.instructions });
@@ -543,6 +545,8 @@ export class LiveSession {
       case 'session.instructions.appended':
         if (ev.client_event_id && ev.client_event_id === this.openingEventId && this.opening?.commentary) {
           this.openingEventId = null;
+          // The caller spoke first: answer them instead of reciting the greeting.
+          if (this.callerSpoke) break;
           this.send({
             type: 'session.commentary.append',
             delegation_id: null,
@@ -554,6 +558,7 @@ export class LiveSession {
 
       /* the officer */
       case 'session.input_transcript.delta':
+        if (String(ev.delta ?? '').trim()) this.callerSpoke = true;
         this.addFragment('user', String(ev.delta ?? ''), Number(ev.start_ms ?? 0), Number(ev.end_ms ?? ev.start_ms ?? 0));
         break;
 
@@ -589,6 +594,9 @@ export class LiveSession {
         const inner = ev.event;
         if (inner?.type === 'response.output_item.done' && inner.item?.type === 'function_call') {
           this.handleToolCall(inner.item);
+        } else if (inner?.type === 'response.incomplete' || inner?.type === 'response.failed') {
+          // e.g. the output cap cut the report call off — say so in the console.
+          console.warn('[live] report backend', inner.type, inner);
         }
         break;
       }

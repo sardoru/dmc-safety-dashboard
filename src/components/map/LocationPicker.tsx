@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { LoaderCircle, LocateFixed, Search, Store } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -36,12 +36,16 @@ export default function LocationPicker({ value, onChange, business, className }:
   const [error, setError] = useState('');
   const [recenter, setRecenter] = useState<{ lat: number; lng: number; n: number } | null>(null);
 
+  const placeSeq = useRef(0);
   const place = async (lat: number, lng: number, address?: string) => {
     setError('');
+    const seq = ++placeSeq.current;
     onChange({ lat, lng, address });
     if (!address) {
       const found = await reverseGeocode(lat, lng);
-      if (found) onChange({ lat, lng, address: found });
+      // A newer pin (another tap, a search, "At my business") wins over a
+      // late answer for this one.
+      if (found && seq === placeSeq.current) onChange({ lat, lng, address: found });
     }
   };
 

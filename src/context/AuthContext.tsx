@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigured, SITE_URL } from '../lib/supabase';
 import { DEMO_PERSONAS } from '../data/demo';
+import { clearSignedPhotoUrls } from '../lib/media';
 import type { Profile, Role } from '../types';
 
 interface AuthContextType {
@@ -31,6 +32,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 const DEMO_ROLE_KEY = 'dt-demo-role';
 
+/** Resolves null when the row doesn't exist; throws when the read fails. */
 async function fetchProfile(userId: string): Promise<Profile | null> {
   // The handle_new_user trigger creates the profile row; retry briefly in case
   // of a first-login race.
@@ -41,10 +43,14 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
       .eq('id', userId)
       .maybeSingle();
     if (data) return data as Profile;
-    if (error && error.code !== 'PGRST116') break;
+    if (error && error.code !== 'PGRST116') throw error;
     await new Promise((r) => setTimeout(r, 400));
   }
   return null;
+}
+
+function sameProfile(a: Profile | null, b: Profile | null): boolean {
+  return a === b || (!!a && !!b && a.id === b.id && a.email === b.email && a.role === b.role && a.display_name === b.display_name);
 }
 
 function readDemoRole(): Role | null {
@@ -58,18 +64,36 @@ function readDemoRole(): Role | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  // Kept separate from `session` so it only changes when the account does:
+  // auth-js re-emits SIGNED_IN with a fresh session object every time the tab
+  // becomes visible, and everything keyed on `user` would reload.
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(supabaseConfigured);
   const [demoRole, setDemoRoleState] = useState<Role | null>(() => (supabaseConfigured ? null : readDemoRole()));
   const mounted = useRef(true);
 
+  const applySession = useCallback((s: Session | null) => {
+    setSession(s);
+    const next = s?.user ?? null;
+    setUser((prev) => (prev && next && prev.id === next.id && prev.email === next.email ? prev : next));
+  }, []);
+
   const loadProfile = useCallback(async (s: Session | null) => {
-    if (!s?.user) {
+    const uid = s?.user?.id;
+    if (!uid) {
       setProfile(null);
       return;
     }
-    const p = await fetchProfile(s.user.id);
-    if (mounted.current) setProfile(p);
+    try {
+      const p = await fetchProfile(uid);
+      if (mounted.current) setProfile((prev) => (sameProfile(prev, p) ? prev : p));
+    } catch (err) {
+      // A failed refresh (e.g. Wi-Fi still waking up) keeps the profile we
+      // already have for this account instead of dropping the user's role.
+      console.warn('[auth] profile refresh failed', err);
+      if (mounted.current) setProfile((prev) => (prev?.id === uid ? prev : null));
+    }
   }, []);
 
   useEffect(() => {
@@ -78,13 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted.current) return;
-      setSession(data.session);
+      applySession(data.session);
       await loadProfile(data.session);
       if (mounted.current) setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_OUT') clearSignedPhotoUrls();
+      applySession(s);
       void loadProfile(s);
     });
 
@@ -92,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted.current = false;
       sub.subscription.unsubscribe();
     };
-  }, [loadProfile]);
+  }, [applySession, loadProfile]);
 
   const sendMagicLink = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
@@ -128,7 +153,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isDemo = !supabaseConfigured;
   const role: Role | null = isDemo ? demoRole : (profile?.role ?? null);
   const persona = isDemo && demoRole ? DEMO_PERSONAS[demoRole] : null;
-  const user = session?.user ?? null;
   const email = persona?.email ?? user?.email ?? null;
   const displayName =
     persona?.name ?? (profile?.display_name || (email ? email.split('@')[0] : '') || 'Account');

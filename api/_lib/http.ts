@@ -24,6 +24,26 @@ export function methodNotAllowed(
   return true;
 }
 
+/**
+ * fetch() that gives up when the upstream hasn't started answering (status +
+ * headers) within `ms`, so a slow provider becomes a clear error instead of
+ * Vercel's 30 s timeout page. Once the response starts, the body (e.g. an
+ * audio stream) is never cut off.
+ */
+export async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
+}
+
 /** Body is auto-parsed by Vercel for JSON content-type; this is a safe accessor. */
 export function readBody<T = Record<string, unknown>>(req: VercelRequest): T {
   if (req.body && typeof req.body === 'object') return req.body as T;

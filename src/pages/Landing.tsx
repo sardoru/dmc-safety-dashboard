@@ -32,7 +32,7 @@ import type { BrandImageName } from '../lib/brand';
 const STEPS: { title: string; body: string; image: BrandImageName }[] = [
   {
     title: 'Report in under two minutes',
-    body: 'Talk to an AI interviewer, fill in a guided form, or send a one-tap alert — with photos and a pin on the map.',
+    body: 'Answer a short voice interview, fill in a guided form, or send a one-tap alert — with photos and a pin on the map.',
     image: 'illoReport',
   },
   {
@@ -48,12 +48,12 @@ const STEPS: { title: string; body: string; image: BrandImageName }[] = [
 ];
 
 const FEATURES = [
-  { icon: Mic, title: 'Two-way voice interview', body: 'OpenAI GPT-Live listens and asks follow-up questions like a dispatcher — and files a structured report.' },
-  { icon: AudioLines, title: 'Spoken alerts & briefings', body: 'New reports, shift briefings and read-backs are voiced with lifelike ElevenLabs Eleven v4 voices.' },
+  { icon: Mic, title: 'Two-way voice interview', body: 'An automated interviewer listens and asks follow-up questions like a dispatcher — then files a structured report.' },
+  { icon: AudioLines, title: 'Spoken alerts & briefings', body: 'New reports, shift briefings and read-backs are read aloud in a clear, natural voice.' },
   { icon: MapIcon, title: 'Live operations map', body: 'Every report pinned, prioritized and tracked from new to resolved — on desktop or a phone in the field.' },
   { icon: ScanEye, title: 'Lookout board', body: 'Repeat offenders and suspect vehicles shared with member businesses, with one-tap sighting reports.' },
   { icon: Scale, title: 'Fair by design', body: 'Reports focus on behavior, clothing and vehicles — the interviewer never accepts appearance alone.' },
-  { icon: Lock, title: 'Private by default', body: 'Photos and contact details stay with officers. Row-level security on every record.' },
+  { icon: Lock, title: 'Private by default', body: 'Photos stay with the reporter and officers, and row-level security protects every record.' },
 ];
 
 const DEMO_ROLES: { role: Role; title: string; body: string; icon: typeof Building2 }[] = [
@@ -133,14 +133,14 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 sm:pb-28 sm:pt-20">
           <div className="max-w-2xl animate-slide-up">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.16em] text-gold-200 backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Downtown safety network
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> A self-regulated safety dashboard
             </p>
             <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
               Downtown Memphis, watching out for each other.
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-navy-100 sm:text-lg">
               See a suspicious person or a crime? Report it straight to the Downtown public-safety officers who monitor this
-              dashboard — by talking to an AI interviewer, a two-minute form, or a single tap.
+              dashboard — by a short voice interview, a two-minute form, or a single tap.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               {reportHref ? (
@@ -302,7 +302,7 @@ export default function Landing() {
 
       {/* Scanner */}
       <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
-        <div className="grid gap-6 rounded-3xl border border-line bg-surface p-6 md:grid-cols-[1fr_1.2fr] md:items-center">
+        <div className="grid grid-cols-1 gap-6 rounded-3xl border border-line bg-surface p-6 md:grid-cols-[1fr_1.2fr] md:items-center">
           <div>
             <h2 className="text-xl font-bold text-ink">Listen live</h2>
             <p className="mt-1 text-sm text-muted">The Memphis Police &amp; Shelby County Sheriff scanner, streamed in the dashboard.</p>

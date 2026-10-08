@@ -58,7 +58,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const { configured, user, role } = useAuth();
   const [connectedProfile, setConnectedProfile] = useState<UserProfile | null>(null);
   const [demoProfile, setDemoProfile] = useState<UserProfile | null>(() => (configured ? null : loadDemoProfile()));
-  const [loading, setLoading] = useState(false);
+  /** Which signed-in user the storefront was loaded for. */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!configured || !user) return;
@@ -68,15 +69,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('owner_id', user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return;
-        setConnectedProfile(data ? rowToProfile(data as BusinessRow) : null);
-        setLoading(false);
+        // A failed read keeps the storefront already on screen.
+        if (error) console.error('[profile] storefront load failed', error);
+        else setConnectedProfile(data ? rowToProfile(data as BusinessRow) : null);
+        setLoadedFor(user.id);
       });
     return () => {
       active = false;
     };
   }, [configured, user]);
+
+  const loading = configured && Boolean(user) && loadedFor !== user?.id;
 
   const setProfile = useCallback(
     async (p: UserProfile | null) => {

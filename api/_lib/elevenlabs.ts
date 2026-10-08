@@ -7,7 +7,11 @@
  * /v1/text-to-speech/{voice}/stream route — first with v4, then with the
  * configured fallback model — so speech keeps working while v4 rolls out.
  */
+import { fetchWithTimeout, isAbortError } from './http.js';
+
 const BASE = 'https://api.elevenlabs.io';
+/** Text to Dialogue caps the combined text; longer text can end early with a 200. */
+const DIALOGUE_MAX_CHARS = 2000;
 
 export const DEFAULT_MODEL = 'eleven_v4';
 export const DEFAULT_FALLBACK_MODEL = 'eleven_multilingual_v2';
@@ -95,10 +99,9 @@ export async function synthesize(
   const cfg = elevenConfig();
   if (!cfg.apiKey) throw new TtsError(503, 'ElevenLabs is not configured (missing ELEVENLABS_API_KEY)');
 
-  const attempts: Attempt[] = [
-    { route: 'dialogue', model: cfg.model },
-    { route: 'tts', model: cfg.model },
-  ];
+  const attempts: Attempt[] = [];
+  if (text.length <= DIALOGUE_MAX_CHARS) attempts.push({ route: 'dialogue', model: cfg.model });
+  attempts.push({ route: 'tts', model: cfg.model });
   if (cfg.fallbackModel && cfg.fallbackModel !== cfg.model) {
     attempts.push({ route: 'tts', model: cfg.fallbackModel });
   }
@@ -116,12 +119,17 @@ export async function synthesize(
 
     let resp: Response;
     try {
-      resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-        body: JSON.stringify(body),
-      });
+      resp = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+          body: JSON.stringify(body),
+        },
+        12_000,
+      );
     } catch (err) {
+      if (isAbortError(err)) throw new TtsError(504, 'The voice service took too long to answer');
       throw new TtsError(502, err instanceof Error ? err.message : 'Could not reach ElevenLabs');
     }
 
@@ -159,9 +167,11 @@ export async function listVoices(): Promise<{ voices: VoiceInfo[]; source: 'acco
     return { voices: voiceCache.voices, source: 'account' };
   }
   try {
-    const resp = await fetch(`${BASE}/v2/voices?page_size=100&sort=name&sort_direction=asc`, {
-      headers: { 'xi-api-key': cfg.apiKey },
-    });
+    const resp = await fetchWithTimeout(
+      `${BASE}/v2/voices?page_size=100&sort=name&sort_direction=asc`,
+      { headers: { 'xi-api-key': cfg.apiKey } },
+      8_000,
+    );
     if (!resp.ok) return { voices: CURATED_VOICES, source: 'curated' };
     const data = (await resp.json()) as { voices?: ApiVoice[] };
     const voices = (data.voices ?? [])

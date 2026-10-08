@@ -45,8 +45,8 @@ const METHODS: {
 }[] = [
   {
     mode: 'voice',
-    title: 'Talk to the AI interviewer',
-    body: 'A two-way voice conversation on OpenAI GPT-Live. It asks the right questions and fills in the report while you talk — hands-free.',
+    title: 'Report by voice',
+    body: 'A two-way automated voice interview. It asks the right questions and fills in the report while you talk — hands-free.',
     cta: 'Start talking',
     icon: Mic,
     image: 'illoVoice',

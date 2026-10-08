@@ -89,6 +89,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       safetyIdentifier: guard.user.id,
     });
     const parsed = parseJsonObject(out);
+    // An unreadable reply is not a structured answer — don't let the defaults
+    // (Suspicious Activity, P3, no flags) pose as one.
+    if (!Object.keys(parsed).length) return sendJson(res, 200, fallback);
     const category = normalizeCategory(parsed.category);
     return sendJson(res, 200, {
       category,

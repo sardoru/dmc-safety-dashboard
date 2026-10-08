@@ -1,13 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireRole } from './_lib/auth.js';
-import { sendError, sendJson, methodNotAllowed, readBody } from './_lib/http.js';
+import { fetchWithTimeout, isAbortError, sendError, sendJson, methodNotAllowed, readBody } from './_lib/http.js';
 
 /**
  * Tap-to-speak transcription (dictation in the report form, officer quick
  * reports). The client records a short clip and posts it as base64 JSON; we
  * forward it to OpenAI's transcription model and return text.
+ *
+ * Vercel refuses request bodies over 4.5 MB before this runs, so the limit is
+ * 3 MB of audio (≈4 MB as base64) — well past the recorder's time cap.
  */
-const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
 
@@ -32,17 +35,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     form.append('file', blob, `audio.${ext}`);
     form.append('model', model);
 
-    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
+    const resp = await fetchWithTimeout(
+      'https://api.openai.com/v1/audio/transcriptions',
+      { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form },
+      25_000,
+    );
     const data = await resp.json();
     if (!resp.ok) {
       return sendError(res, 502, data?.error?.message || `Transcription failed (${resp.status})`);
     }
     return sendJson(res, 200, { text: (data.text || '').trim() });
   } catch (err) {
+    if (isAbortError(err)) return sendError(res, 504, 'Transcription took too long — try a shorter recording');
     return sendError(res, 502, err instanceof Error ? err.message : 'Transcription failed');
   }
 }

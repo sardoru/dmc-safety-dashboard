@@ -80,9 +80,11 @@ export function BoloProvider({ children }: { children: ReactNode }) {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(100)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return;
-        setBolos(sortBolos(((data ?? []) as BoloRow[]).map(rowToBolo)));
+        // A failed read keeps the lookouts already on screen.
+        if (error) console.error('[bolos] load failed', error);
+        else setBolos(sortBolos(((data ?? []) as BoloRow[]).map(rowToBolo)));
         setLoadedFor(user.id);
       });
     const channel = supabase

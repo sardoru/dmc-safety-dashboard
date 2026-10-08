@@ -29,7 +29,7 @@ function Block({ title, children, ai }: { title: string; children: React.ReactNo
     <section className="border-t border-line px-4 py-5 first:border-t-0 sm:px-6">
       <h3 className="mb-3 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-subtle">
         {title}
-        {ai && <Sparkles className="h-3.5 w-3.5 text-accent" aria-label="Filled by AI" />}
+        {ai && <Sparkles className="h-3.5 w-3.5 text-accent" aria-label="Filled in from your notes" />}
       </h3>
       {children}
     </section>

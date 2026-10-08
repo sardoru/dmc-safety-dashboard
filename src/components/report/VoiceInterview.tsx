@@ -101,6 +101,9 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
   // Keep the transcript scrolled to the newest line, and share it upward.
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
+    // A fresh mount (e.g. Back from review) starts empty — that must not wipe
+    // the transcript already in the draft.
+    if (!lines.length) return;
     const text = lines
       .filter((l) => !l.live)
       .map((l) => `${l.role === 'caller' ? 'Caller' : 'Interviewer'}: ${l.text}`)
@@ -164,10 +167,10 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <div className="card flex flex-col items-center p-8 text-center">
           <BrandImage name="illoVoice" width={320} alt="" className="mb-2 h-44 w-44 object-contain" fallback={<VoiceOrb mode="idle" levels={levels} size={170} className="mb-4" />} />
-          <h2 className="text-lg font-bold text-ink">Talk to the AI interviewer</h2>
+          <h2 className="text-lg font-bold text-ink">Report by voice</h2>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
             {isDemo
-              ? 'The two-way voice interview runs on the connected deployment, powered by OpenAI GPT-Live: it greets you, asks the right follow-up questions, and fills in the report while you talk.'
+              ? 'The two-way voice interview runs on the connected deployment: an automated interviewer greets you, asks the right follow-up questions, and fills in the report while you talk.'
               : 'Voice interviews aren’t configured on this deployment yet (OPENAI_API_KEY). Use the guided form instead — it works the same way.'}
           </p>
           <Button className="mt-6" icon={<Keyboard className="h-4 w-4" />} onClick={onUseForm}>

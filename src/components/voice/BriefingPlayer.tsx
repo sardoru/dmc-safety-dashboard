@@ -95,7 +95,7 @@ export default function BriefingPlayer({ compact }: { compact?: boolean }) {
         icon={<Headphones className="h-4 w-4" />}
         onClick={() => void generate()}
         aria-label="Shift briefing"
-        title="Play an AI shift briefing (ElevenLabs voice)"
+        title="Play the spoken shift briefing"
       >
         <span className={compact ? 'hidden md:inline' : undefined}>Shift briefing</span>
       </Button>
@@ -109,7 +109,7 @@ export default function BriefingPlayer({ compact }: { compact?: boolean }) {
         title="Shift briefing"
         description={
           source === 'ai'
-            ? `Written by AI from the last ${windowHours} hours · voice: ${voiceLabel}`
+            ? `Summarized from the last ${windowHours} hours · voice: ${voiceLabel}`
             : `Summary of the last ${windowHours} hours · voice: ${voiceLabel}`
         }
         icon={<Headphones className="h-5 w-5" />}
@@ -154,7 +154,7 @@ export default function BriefingPlayer({ compact }: { compact?: boolean }) {
           />
           {source === 'ai' && (
             <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent-strong">
-              <Sparkles className="h-3.5 w-3.5" /> AI summary
+              <Sparkles className="h-3.5 w-3.5" /> Summary
             </span>
           )}
         </div>

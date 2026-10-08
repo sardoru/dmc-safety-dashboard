@@ -172,6 +172,17 @@ async function main() {
   r = await run('api/tts.ts', 'DELETE', 'tok-off');
   check('DELETE → 405', r.statusCode === 405);
 
+  // Text to Dialogue caps combined text at 2,000 chars (longer can end early with a 200).
+  upstream = (url) =>
+    url.includes('/v1/text-to-speech/')
+      ? new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'audio/mpeg' } })
+      : url.includes('text-to-dialogue')
+        ? new Response(new Uint8Array([9]), { status: 200, headers: { 'content-type': 'audio/mpeg' } })
+        : null;
+  calls.length = 0;
+  r = await run('api/tts.ts', 'POST', 'tok-off', { text: 'Long shift briefing. '.repeat(105) });
+  check('over 2000 chars skips Text to Dialogue → TTS route', r.statusCode === 200 && r.headers['x-tts-route'] === 'tts' && !calls.some((c) => c.url.includes('text-to-dialogue')), { h: r.headers });
+
   // ---------------------------------------------------------------- Live session
   console.log('api/live-session');
   delete process.env.OPENAI_API_KEY;
@@ -281,6 +292,64 @@ async function main() {
   delete process.env.OPENAI_API_KEY;
   r = await run('api/reports/extract.ts', 'POST', 'tok-biz', { transcript: 'raw words' });
   check('no key → 200 unstructured fallback', r.statusCode === 200 && r.data.structured === false && r.data.description === 'raw words', r.data);
+
+  process.env.OPENAI_API_KEY = 'sk-test';
+  upstream = (url) => (url.endsWith('/v1/responses') ? json(200, { output_text: 'Sorry, I can only help with incident reports.' }) : null);
+  r = await run('api/reports/extract.ts', 'POST', 'tok-biz', { transcript: 'two men grabbed phones and ran toward Beale' });
+  check('unreadable reply → structured:false (no fake category or flags)', r.statusCode === 200 && r.data.structured === false && r.data.description === 'two men grabbed phones and ran toward Beale', r.data);
+
+  const exModels: string[] = [];
+  upstream = (url, init) => {
+    if (!url.endsWith('/v1/responses')) return null;
+    exModels.push(JSON.parse(String((init as RequestInit).body)).model);
+    if (exModels.length === 1) return json(200, { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output_text: '{"category":"Robbery","prio' });
+    return json(200, { output_text: JSON.stringify({ category: 'Robbery', priority: 1, title: 'Phones grabbed', description: 'Two men grabbed phones.', location_hint: 'Beale St' }) });
+  };
+  r = await run('api/reports/extract.ts', 'POST', 'tok-biz', { transcript: 'two men grabbed phones on Beale' });
+  check('cut-off JSON → next model answers', r.data.structured === true && r.data.category === 'Robbery' && exModels.length === 2, { exModels, d: r.data });
+
+  upstream = (url) =>
+    url.endsWith('/v1/responses')
+      ? json(200, { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output_text: 'Three reports since noon. One robbery on Beale is still act' })
+      : null;
+  r = await run('api/briefing.ts', 'POST', 'tok-off', { incidents: [] });
+  check('cut-off briefing ends on its last whole sentence', r.statusCode === 200 && r.data.text === 'Three reports since noon.', r.data);
+  delete process.env.OPENAI_API_KEY;
+
+  // ---------------------------------------------------------------- Email hook
+  console.log('api/auth/email-hook');
+  const { createHmac } = await import('node:crypto');
+  const hookBody = JSON.stringify({
+    user: { email: 'owner@shop.test' },
+    email_data: { token_hash: 'th_123', email_action_type: 'magiclink', site_url: 'https://dmc-safety-dashboard.vercel.app' },
+  });
+  const hook = (await import(pathToFileURL(resolve(ROOT, 'api/auth/email-hook.ts')).href)).default as (q: never, s: never) => Promise<void>;
+  const runHook = async (headers: Record<string, string>) => {
+    const res = new MockRes();
+    await hook({ method: 'POST', headers, body: hookBody, query: {} } as never, res as never);
+    return res;
+  };
+  const hookKey = Buffer.from('harness-hook-secret-0123456789');
+  const sign = (id: string, ts: number) => `v1,${createHmac('sha256', hookKey).update(`${id}.${ts}.${hookBody}`).digest('base64')}`;
+  const nowSec = () => Math.floor(Date.now() / 1000);
+
+  delete process.env.SEND_EMAIL_HOOK_SECRET;
+  r = await runHook({});
+  check('no secret configured → 503 (fails closed)', r.statusCode === 503, r.data);
+  process.env.SEND_EMAIL_HOOK_SECRET = `v1,whsec_${hookKey.toString('base64')}`;
+  const stale = nowSec() - 600;
+  r = await runHook({ 'webhook-id': 'msg_1', 'webhook-timestamp': String(stale), 'webhook-signature': sign('msg_1', stale) });
+  check('validly signed but 10 min old → 401 (replay)', r.statusCode === 401, r.data);
+  r = await runHook({ 'webhook-id': 'msg_2', 'webhook-timestamp': String(nowSec()), 'webhook-signature': 'v1,AAAA' });
+  check('bad signature → 401', r.statusCode === 401, r.data);
+  process.env.RESEND_API_KEY = 're_test';
+  upstream = (url) => (url.startsWith('https://api.resend.com/') ? json(200, { id: 'em_123' }) : null);
+  calls.length = 0;
+  const fresh = nowSec();
+  r = await runHook({ 'webhook-id': 'msg_3', 'webhook-timestamp': String(fresh), 'webhook-signature': sign('msg_3', fresh) });
+  check('fresh valid signature → 200, one email sent', r.statusCode === 200 && calls.filter((c) => c.url.startsWith('https://api.resend.com/')).length === 1, { s: r.statusCode, d: r.data });
+  delete process.env.RESEND_API_KEY;
+  delete process.env.SEND_EMAIL_HOOK_SECRET;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

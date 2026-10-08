@@ -4,6 +4,8 @@
  * takes a feature down, and retries a model once without the optional knobs
  * (reasoning / verbosity / safety id) when it rejects them.
  */
+import { fetchWithTimeout, isAbortError } from './http.js';
+
 const RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 export class UpstreamError extends Error {
@@ -39,6 +41,8 @@ export interface RespondOptions {
 }
 
 interface ResponsesPayload {
+  status?: string;
+  incomplete_details?: { reason?: string };
   output_text?: string;
   output?: { type?: string; content?: { type?: string; text?: string }[] }[];
   error?: { message?: string; code?: string; type?: string };
@@ -61,6 +65,8 @@ export async function respond(opts: RespondOptions): Promise<{ text: string; mod
   if (!apiKey) throw new UpstreamError(503, 'OpenAI is not configured (missing OPENAI_API_KEY)');
 
   let lastError: UpstreamError = new UpstreamError(502, 'No model produced a response');
+  // The whole model chain must finish inside the function's 30 s limit.
+  const deadline = Date.now() + 25_000;
 
   for (const model of opts.models) {
     for (const full of [true, false]) {
@@ -82,20 +88,38 @@ export async function respond(opts: RespondOptions): Promise<{ text: string; mod
       }
       if (Object.keys(text).length) body.text = text;
 
+      const left = deadline - Date.now();
+      if (left < 2_000) throw new UpstreamError(504, 'The text service took too long to answer');
       let resp: Response;
       try {
-        resp = await fetch(RESPONSES_URL, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        resp = await fetchWithTimeout(
+          RESPONSES_URL,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          },
+          left,
+        );
       } catch (err) {
+        if (isAbortError(err)) throw new UpstreamError(504, 'The text service took too long to answer');
         throw new UpstreamError(502, err instanceof Error ? err.message : 'Could not reach OpenAI');
       }
 
       const data = (await resp.json().catch(() => ({}))) as ResponsesPayload;
       if (resp.ok) {
         const out = outputText(data);
+        if (out && data.status === 'incomplete') {
+          // Cut off (usually max_output_tokens). Truncated JSON is useless, so
+          // try the next model; text keeps its last complete sentence.
+          const reason = data.incomplete_details?.reason ?? 'incomplete';
+          if (opts.json) {
+            lastError = new UpstreamError(502, `${model} stopped early (${reason})`);
+            break; // next model
+          }
+          const whole = out.match(/^[\s\S]*[.!?](?=\s|$)/)?.[0];
+          return { text: whole ?? out, model };
+        }
         if (out) return { text: out, model };
         lastError = new UpstreamError(502, `${model} returned an empty response`);
         break; // next model

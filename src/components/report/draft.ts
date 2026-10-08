@@ -172,6 +172,49 @@ export function mergeCapture(d: ReportDraft, c: CapturedReport, profile: UserPro
   return next;
 }
 
+/**
+ * "Organize with AI" on the form: tidy the description and fill only what the
+ * reporter left empty. Never undo a choice — a ticked weapon / injury /
+ * happening-now flag stays ticked, and the priority keeps following the
+ * category and flags unless the reporter set it.
+ */
+export function organizeInto(d: ReportDraft, c: CapturedReport): ReportDraft {
+  const fields: string[] = [];
+  const next: ReportDraft = { ...d };
+  if (!d.category) {
+    const key = isCategoryKey(c.category) ? c.category : categoryFromLabel(c.category);
+    if (key) {
+      next.category = key;
+      fields.push('category');
+    }
+  }
+  if (!d.title.trim() && c.title?.trim()) {
+    next.title = c.title.trim();
+    fields.push('title');
+  }
+  if (c.description?.trim()) {
+    next.description = c.description.trim();
+    fields.push('description');
+  }
+  next.happeningNow = d.happeningNow || c.happening_now === true;
+  next.weaponsSeen = d.weaponsSeen || c.weapons_seen === true;
+  next.injuries = d.injuries || c.injuries === true;
+  if (!d.subjects.length && c.subjects?.length) {
+    next.subjects = c.subjects.map(captureSubject);
+    fields.push('subjects');
+  }
+  if (!d.vehicles.length && c.vehicles?.length) {
+    next.vehicles = c.vehicles.map(captureVehicle);
+    fields.push('vehicles');
+  }
+  if (!d.place && !d.locationHint.trim() && c.location_hint?.trim()) {
+    next.locationHint = c.location_hint.trim();
+    fields.push('place');
+  }
+  next.aiFields = Array.from(new Set([...d.aiFields, ...fields]));
+  return next;
+}
+
 const WORD_NUMBERS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   fifteen: 15, twenty: 20, thirty: 30, forty: 40, 'forty-five': 45, fifty: 50, few: 3, couple: 2,
