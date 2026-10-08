@@ -149,6 +149,7 @@ are **server-only** Vercel variables.
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | client | Supabase client (unset = demo mode) |
 | `VITE_SITE_URL` | client | origin used in email links |
 | `VITE_BROADCASTIFY_FEED_ID`, `VITE_BROADCASTIFY_STREAM_URL` | client | Memphis PD scanner (feed `215` streams inline) |
+| `VITE_CARTO_KEY` | client | CARTO basemap key (free: carto.com/basemaps/apikey). Unset = OpenStreetMap tiles; CARTO without a key shows an "API KEY REQUIRED" watermark. Baked in at build — redeploy after setting it. |
 | `VITE_RADIO_WS_URL`, `VITE_RADIO_HTTP_URL` | client | optional radio-transcription bridge |
 | `VITE_IMAGE_OPTIMIZER` | client | `off` loads brand images straight from the CDN |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | server | admin DB access, session minting, caller context |

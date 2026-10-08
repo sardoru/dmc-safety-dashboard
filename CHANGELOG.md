@@ -29,6 +29,11 @@ against production in a rolled-back transaction — 15/15 scenarios).
 - `mark_report_seen()` is no longer executable by `anon`.
 
 ### Fixed
+- **Maps showed no streets in production.** CARTO basemaps now need a key — without one
+  every tile is an "API KEY REQUIRED" watermark (served with HTTP 200). CARTO Voyager /
+  Dark Matter is used only when `VITE_CARTO_KEY` is set (free key:
+  carto.com/basemaps/apikey); otherwise the standard OpenStreetMap tiles (darkened in dark
+  mode) keep every map working.
 - **Coming back to the tab no longer reloads everything or signs officers out of their
   role**: `user` stays the same object while the account is the same, and a failed profile /
   report / lookout / storefront read keeps what is on screen.
