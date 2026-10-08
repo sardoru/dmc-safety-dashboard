@@ -1,12 +1,15 @@
 import { Car, UserRound } from 'lucide-react';
 import type { SubjectDescription, VehicleDescription } from '../../types';
 
-function Row({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
+function Row({ label, value }: { label: string; value?: unknown }) {
+  // Descriptions are stored as member-written JSON: show text and numbers,
+  // skip anything else (an object here would crash the whole view).
+  const text = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  if (!text) return null;
   return (
     <div className="flex gap-3 py-1">
       <dt className="w-24 flex-shrink-0 text-[12px] text-subtle">{label}</dt>
-      <dd className="min-w-0 text-[13px] text-ink">{value}</dd>
+      <dd className="min-w-0 text-[13px] text-ink">{text}</dd>
     </div>
   );
 }

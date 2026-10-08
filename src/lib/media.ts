@@ -64,11 +64,20 @@ export async function photosToDataUrls(files: File[]): Promise<string[]> {
 
 const signedCache = new Map<string, { url: string; expires: number }>();
 
-/** Resolve stored photo references to displayable URLs (data URLs pass through). */
+/** Forget signed URLs (on sign-out) so the next account on this tab can't reuse them. */
+export function clearSignedPhotoUrls(): void {
+  signedCache.clear();
+}
+
+const isInline = (r: string) => r.startsWith('data:image/');
+/** Any other scheme (http:, https:, javascript:…) — never shown: no outside images or tracking pixels. */
+const isForeign = (r: string) => !isInline(r) && /^[a-z][a-z0-9+.-]*:/i.test(r);
+
+/** Resolve stored photo references (storage paths) to displayable URLs; inline images pass through. */
 export async function resolvePhotoUrls(refs: string[]): Promise<string[]> {
   const now = Date.now();
   const need = refs.filter(
-    (r) => !r.startsWith('data:') && !r.startsWith('http') && (signedCache.get(r)?.expires ?? 0) <= now,
+    (r) => !isInline(r) && !isForeign(r) && (signedCache.get(r)?.expires ?? 0) <= now,
   );
   if (need.length) {
     const { data } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(need, 3600);
@@ -79,6 +88,6 @@ export async function resolvePhotoUrls(refs: string[]): Promise<string[]> {
     }
   }
   return refs
-    .map((r) => (r.startsWith('data:') || r.startsWith('http') ? r : signedCache.get(r)?.url ?? ''))
+    .map((r) => (isInline(r) ? r : isForeign(r) ? '' : (signedCache.get(r)?.url ?? '')))
     .filter(Boolean);
 }

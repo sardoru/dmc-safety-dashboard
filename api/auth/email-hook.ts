@@ -24,11 +24,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const raw = await readRawBody(req);
 
+  // Fail closed: without the secret anyone could make us send branded
+  // sign-in emails that point wherever they like.
   const secret = process.env.SEND_EMAIL_HOOK_SECRET;
-  if (secret) {
-    if (!verifyStandardWebhook(raw, req.headers, secret)) {
-      return sendError(res, 401, 'Invalid webhook signature');
-    }
+  if (!secret) return sendError(res, 503, 'Email hook is not configured');
+  if (!verifyStandardWebhook(raw, req.headers, secret)) {
+    return sendError(res, 401, 'Invalid webhook signature');
   }
 
   let payload: EmailHookPayload;
@@ -141,6 +142,10 @@ function verifyStandardWebhook(
   ) {
     return false;
   }
+
+  // Standard Webhooks: refuse replays outside a 5-minute window.
+  const sentAt = Number(timestamp);
+  if (!Number.isFinite(sentAt) || Math.abs(Date.now() / 1000 - sentAt) > 5 * 60) return false;
 
   const base64Secret = secret.replace(/^v1,whsec_/, '').replace(/^whsec_/, '');
   let key: Buffer;

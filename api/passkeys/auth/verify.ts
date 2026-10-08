@@ -36,12 +36,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
   if (!passkey) return sendError(res, 400, 'Unknown passkey');
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('email')
-    .eq('id', passkey.user_id)
-    .maybeSingle();
-  if (!profile?.email) return sendError(res, 400, 'Account is missing an email');
+  // Sign in as the passkey's owner by the email on their auth account. Never
+  // use profiles.email: it is a plain column, and trusting it let a member
+  // mint a session for any other account.
+  const { data: owner } = await admin.auth.admin.getUserById(passkey.user_id as string);
+  const ownerEmail = owner?.user?.email;
+  if (!ownerEmail) return sendError(res, 400, 'Account is missing an email');
 
   let verification;
   try {
@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   await admin.from('webauthn_challenges').delete().eq('id', challengeRow.id);
 
   try {
-    const session = await mintSession(profile.email);
+    const session = await mintSession(ownerEmail);
     return sendJson(res, 200, session);
   } catch (err) {
     return sendError(res, 500, err instanceof Error ? err.message : 'Could not create session');
