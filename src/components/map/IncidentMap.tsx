@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { DOWNTOWN_CENTER, DOWNTOWN_CORE, jitter } from '../../lib/geo';
 import { PRIORITIES, categoryMeta } from '../../lib/taxonomy';
 import { cn, shortAddress } from '../../lib/format';
-import { boloIcon, businessIcon, incidentIcon, TILE_ATTRIBUTION, tileUrl } from './mapIcons';
+import { boloIcon, businessIcon, incidentIcon, tileLayerProps } from './mapIcons';
 
 export interface MapFocus {
   lat: number;
@@ -96,7 +96,7 @@ export default function IncidentMap({
   return (
     <div className={cn('relative h-full w-full overflow-hidden', className)}>
       <MapContainer center={center ?? DOWNTOWN_CENTER} zoom={zoom} className="h-full w-full" zoomControl preferCanvas={false}>
-        <TileLayer key={dark ? 'dark' : 'light'} url={tileUrl(dark)} attribution={TILE_ATTRIBUTION} detectRetina />
+        <TileLayer key={dark ? 'dark' : 'light'} {...tileLayerProps(dark)} />
         <FlyTo focus={focus} />
         <AutoResize />
 

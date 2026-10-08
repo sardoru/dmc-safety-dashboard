@@ -90,11 +90,40 @@ export function pickIcon(): L.DivIcon {
   return icon;
 }
 
-export const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+/**
+ * Basemap tiles. CARTO (Voyager / Dark Matter) now needs a key — without one
+ * every tile is an "API KEY REQUIRED" watermark — so it is used only when
+ * VITE_CARTO_KEY is set (free: carto.com/basemaps/apikey). Otherwise the
+ * standard OpenStreetMap tiles, darkened with a CSS filter in dark mode, keep
+ * the maps working; no retina doubling, to stay a light user of OSM's servers.
+ */
+const CARTO_KEY = ((import.meta.env.VITE_CARTO_KEY as string | undefined) ?? '').trim();
 
-export function tileUrl(dark: boolean): string {
-  return dark
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const OSM_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+export interface TileLayerSettings {
+  url: string;
+  attribution: string;
+  detectRetina: boolean;
+  maxNativeZoom: number;
+  className?: string;
+}
+
+export function tileLayerProps(dark: boolean): TileLayerSettings {
+  if (CARTO_KEY) {
+    const style = dark ? 'dark_all' : 'voyager';
+    return {
+      url: `https://basemaps.cartocdn.com/rastertiles/${style}/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(CARTO_KEY)}`,
+      attribution: `${OSM_CREDIT} &copy; <a href="https://carto.com/attributions">CARTO</a>`,
+      detectRetina: true,
+      maxNativeZoom: 20,
+    };
+  }
+  return {
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: OSM_CREDIT,
+    detectRetina: false,
+    maxNativeZoom: 19,
+    className: dark ? 'osm-tiles-dark' : undefined,
+  };
 }

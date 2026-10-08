@@ -6,7 +6,7 @@ import type { Marker as LeafletMarker } from 'leaflet';
 import { useTheme } from '../../context/ThemeContext';
 import { currentPosition, DOWNTOWN_CENTER, geocode, reverseGeocode, type Place } from '../../lib/geo';
 import { cn, shortAddress } from '../../lib/format';
-import { pickIcon, TILE_ATTRIBUTION, tileUrl } from './mapIcons';
+import { pickIcon, tileLayerProps } from './mapIcons';
 
 interface LocationPickerProps {
   value: Place | null;
@@ -137,7 +137,7 @@ export default function LocationPicker({ value, onChange, business, className }:
       </form>
       <div className="relative h-64 overflow-hidden rounded-2xl border border-line sm:h-72">
         <MapContainer center={value ? [value.lat, value.lng] : DOWNTOWN_CENTER} zoom={value ? 17 : 15} className="h-full w-full">
-          <TileLayer key={theme} url={tileUrl(theme === 'dark')} attribution={TILE_ATTRIBUTION} detectRetina />
+          <TileLayer key={theme} {...tileLayerProps(theme === 'dark')} />
           <ClickToPlace onPick={(lat, lng) => void place(lat, lng)} />
           <Recenter target={recenter} />
           {value && (
