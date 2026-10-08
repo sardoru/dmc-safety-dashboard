@@ -202,7 +202,7 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
                   : 'Ready when you are'}
           </p>
           <p className="mt-1 text-[12px] text-navy-200">
-            {connected ? `${mmss(elapsed)} · GPT-Live${config?.voice ? ` · voice “${config.voice}”` : ''}` : 'Speak naturally — like calling a dispatcher'}
+            {connected ? `${mmss(elapsed)}${config?.voice ? ` · voice “${config.voice}”` : ''}` : 'Speak naturally — like calling a dispatcher'}
           </p>
 
           <div className="mt-5 flex items-center gap-3">

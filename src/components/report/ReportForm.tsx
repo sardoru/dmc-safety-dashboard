@@ -158,7 +158,7 @@ export default function ReportForm({ draft, setDraft, profile, onReview }: Repor
             'inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition-colors',
             prefs.guide ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line text-muted hover:text-ink',
           )}
-          title="Read each question aloud (ElevenLabs voice)"
+          title="Read each question aloud"
         >
           {prefs.guide ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
           <span className="hidden sm:inline">Read aloud</span>

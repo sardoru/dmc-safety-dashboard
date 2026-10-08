@@ -195,7 +195,7 @@ export default function VoiceAlertsCard() {
           </div>
           <VoicePicker />
           <p className="mt-3 text-[12px] leading-relaxed text-subtle">
-            Speech uses ElevenLabs Eleven v4 and falls back to your browser’s built-in voice when it isn’t available.
+            Speech uses a natural voice and falls back to your browser’s built-in voice when it isn’t available.
           </p>
         </section>
       </div>

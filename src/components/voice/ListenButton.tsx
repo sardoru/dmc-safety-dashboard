@@ -51,7 +51,7 @@ export default function ListenButton({
         type="button"
         onClick={onClick}
         aria-label={active ? 'Stop reading' : label}
-        title={active ? 'Stop' : `${label} (ElevenLabs voice)`}
+        title={active ? 'Stop' : label}
         className={cn(
           'inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
           active ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-surface-3 hover:text-ink',
@@ -67,7 +67,7 @@ export default function ListenButton({
     <button
       type="button"
       onClick={onClick}
-      title={`${label} (ElevenLabs voice)`}
+      title={label}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full border font-semibold transition-colors',
         size === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-10 px-4 text-sm',

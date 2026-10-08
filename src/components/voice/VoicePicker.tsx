@@ -26,12 +26,12 @@ export default function VoicePicker() {
 
   if (!info.configured) {
     return (
-      <Banner tone="info" title="ElevenLabs voices">
+      <Banner tone="info" title="Voices">
         {info.loading
-          ? 'Checking the ElevenLabs connection…'
+          ? 'Checking the voice service…'
           : info.error === 'demo'
-            ? 'Demo mode uses your browser’s built-in voice. On the connected deployment, alerts and briefings are spoken with ElevenLabs Eleven v4 voices.'
-            : 'ElevenLabs isn’t configured on this deployment yet (set ELEVENLABS_API_KEY). Speech falls back to your browser’s voice.'}
+            ? 'Demo mode uses your browser’s built-in voice. On the live dashboard, alerts and briefings are spoken in the natural voice you pick here.'
+            : 'Natural voices aren’t set up on this deployment yet. Speech uses your browser’s voice for now.'}
       </Banner>
     );
   }
@@ -44,10 +44,7 @@ export default function VoicePicker() {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search voices — calm, British, narrator…" className="pl-9" />
         </div>
       </div>
-      <p className="mb-2 text-[12px] text-subtle">
-        Model <span className="font-mono text-muted">{info.model}</span>
-        {info.voiceSource === 'curated' && ' · showing ElevenLabs premade voices'}
-      </p>
+      {info.voiceSource === 'curated' && <p className="mb-2 text-[12px] text-subtle">Showing the standard voice set</p>}
       <ul className="scrollbar-thin max-h-80 space-y-1.5 overflow-y-auto pr-1">
         {voices.map((v) => {
           const active = v.id === selected;

@@ -42,7 +42,7 @@ export default function AccountPage() {
             {isDemo ? (
               <p className="text-[13px] leading-relaxed text-muted">
                 Passkeys let you sign in with Face ID, Touch ID or your device PIN instead of waiting for an email link.
-                They’re available once the dashboard is connected to Supabase.
+                They’re available on the live dashboard.
               </p>
             ) : (
               <PasskeyManager />

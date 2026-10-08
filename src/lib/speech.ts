@@ -221,7 +221,7 @@ class SpeechChannel {
         }
       } catch (err) {
         if (job.cancelled) return null;
-        this.set({ lastError: err instanceof Error ? err.message : 'ElevenLabs speech failed' });
+        this.set({ lastError: err instanceof Error ? err.message : 'Speech failed' });
       }
     }
     if (job.cancelled) return null;

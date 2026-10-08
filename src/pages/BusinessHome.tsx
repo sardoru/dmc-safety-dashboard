@@ -198,7 +198,7 @@ export default function BusinessHome() {
           <Card>
             <CardHeader
               title="Spoken alerts"
-              subtitle="Hear nearby alerts and updates on your reports, read by an ElevenLabs voice."
+              subtitle="Hear nearby alerts and updates on your reports, read aloud."
               icon={prefs.alerts ? <Bell className="h-4.5 w-4.5" /> : <BellOff className="h-4.5 w-4.5" />}
               action={
                 <Button

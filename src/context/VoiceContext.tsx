@@ -100,20 +100,6 @@ function notify(title: string, body: string, tag: string) {
   }
 }
 
-/** "eleven_v4" → "Eleven v4", "eleven_flash_v2_5" → "Flash v2.5". */
-function modelLabel(model?: string | null): string {
-  if (!model) return 'Eleven v4';
-  const parts = model.replace(/^eleven_/, '').split('_');
-  const out: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i];
-    if (/^v\d+$/.test(p)) out.push(/^\d+$/.test(parts[i + 1] ?? '') ? `${p}.${parts[++i]}` : p);
-    else out.push(p.charAt(0).toUpperCase() + p.slice(1));
-  }
-  const label = out.join(' ');
-  return /^v\d/.test(label) ? `Eleven ${label}` : label;
-}
-
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const { role, signedIn, isDemo, userId } = useAuth();
   const { subscribe } = useIncidents();
@@ -253,7 +239,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
   const voiceLabel =
     info.configured && voiceId
-      ? `${info.voices.find((v) => v.id === voiceId)?.name ?? 'ElevenLabs voice'} · ${modelLabel(info.model)}`
+      ? (info.voices.find((v) => v.id === voiceId)?.name ?? 'Natural voice')
       : 'Browser voice';
 
   return (
