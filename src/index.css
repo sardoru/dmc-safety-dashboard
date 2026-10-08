@@ -304,13 +304,6 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .bg-grid {
-    background-image:
-      linear-gradient(to right, rgb(128 128 128 / 0.08) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(128 128 128 / 0.08) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
-
   /* Deep navy brand backdrop used behind hero imagery (and as its fallback). */
   .bg-brand-night {
     background:
