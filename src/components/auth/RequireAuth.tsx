@@ -4,15 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import { LoadingScreen } from './AuthStates';
 
 /**
- * Gate a route behind authentication. In demo mode (no Supabase) the children
- * render so the public dashboard keeps working before env vars are set.
+ * Gate signed-in areas. Connected: a Supabase session. Demo: a demo role
+ * picked on the welcome page.
  */
 export default function RequireAuth({ children }: { children: ReactNode }) {
-  const { configured, loading, session } = useAuth();
+  const { isDemo, loading, signedIn } = useAuth();
   const location = useLocation();
 
-  if (!configured) return <>{children}</>;
-  if (loading) return <LoadingScreen />;
-  if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!isDemo && loading) return <LoadingScreen />;
+  if (!signedIn) {
+    return <Navigate to={isDemo ? '/welcome' : '/login'} replace state={{ from: location.pathname }} />;
+  }
   return <>{children}</>;
 }

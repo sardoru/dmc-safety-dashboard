@@ -3,7 +3,137 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [Unreleased] — Voice on OpenAI GPT-Live-1 (raw full duplex) 🎙️
+## [0.3.1] — 2026-10-08 — Security + correctness review of the redesign
+
+A full review of 0.3.0 (API/RLS security, frontend correctness, voice integrations) after it
+went live. **Needs migration `0003_write_guards.sql`** (safe to run more than once; tested
+against production in a rolled-back transaction — 15/15 scenarios).
+
+### Added
+- **"How it works" film at `/how-it-works`** — a 5:53 3Blue1Brown-style walkthrough of the
+  Safety Dashboard and the Ops Center (14 chapters, real screens from the demo, narration
+  written ~80% to ASD-STE100, a natural voice, a QR code per chapter, designed cover and end
+  card, OpenStreetMap credited). The page has its own HTML entry so link previews show the
+  video (`og:type` video.other, `og:video`, cover image) and search engines get a
+  `VideoObject` with one `Clip` per chapter; chapters and every transcript sentence are
+  timestamp links, and `?t=` deep links (`89`, `1:29`, `1m29s`) open the film there. The
+  landing page links to it. `scripts/film-data.mjs` brings a new cut in from the film
+  project (`~/videos/dmc-safety-how-it-works`).
+
+### Security
+- **Passkey sign-in could take over any account, including the admin** (present since the
+  June build). `/api/passkeys/auth/verify` minted a session for `profiles.email`, which every
+  member could rewrite. It now signs in by the email on the passkey owner's auth account
+  (`auth.admin.getUserById`). In the database, members can update only `display_name`
+  (admins: `role`) — hotfixed in production on 2026-10-08, recorded in `0003`.
+- **Reports can't be forged** (`0003`): the database stamps `reporter_id`, `source` and the
+  member's own storefront name on every report a member files; status, priority,
+  assignment and timestamps stay officer-only (a member's only change to a report is
+  marking it seen); timeline entries from members are plain notes in their own name (the
+  "Report received …" receipt excepted). The insert policy no longer accepts reports
+  without a reporter.
+- The Supabase email hook **fails closed** without `SEND_EMAIL_HOOK_SECRET` and refuses
+  signatures older or newer than 5 minutes (replays).
+- Photos only render from our own storage (or inline images) — no outside URLs or tracking
+  pixels; signed photo URLs are forgotten on sign-out; a malformed description in a report
+  no longer crashes the officer's view.
+- `mark_report_seen()` is no longer executable by `anon`.
+
+### Fixed
+- **Maps showed no streets in production.** CARTO basemaps now need a key — without one
+  every tile is an "API KEY REQUIRED" watermark (served with HTTP 200). CARTO Voyager /
+  Dark Matter is used only when `VITE_CARTO_KEY` is set (free key:
+  carto.com/basemaps/apikey); otherwise the standard OpenStreetMap tiles (darkened in dark
+  mode) keep every map working.
+- **Coming back to the tab no longer reloads everything or signs officers out of their
+  role**: `user` stays the same object while the account is the same, and a failed profile /
+  report / lookout / storefront read keeps what is on screen.
+- **"Organize my notes"** (was "Organize with AI") fills only what the reporter left empty
+  and never clears a ticked weapon / injury / happening-now flag; an unreadable or keyless
+  answer saves the text only instead of posing as "Suspicious Activity · P3".
+- A note that fails to save stays in the box with a "Note not saved" message.
+- The voice transcript survives Back from the review step.
+- Reports aren't filed in the legacy shape before the schema check finishes; a check
+  violation no longer switches the session to legacy writes.
+- Businesses see a lookout disappear when it's cleared (they can read it for a day after);
+  a sighting only counts against an active lookout.
+- Inviting an existing account as officer/admin actually sets the role (the role guard
+  reverted server-side changes).
+- The voice interview doesn't greet over a caller who speaks first; the report tool has room
+  for a full report (`max_output_tokens` 500 → 1200); backend failures are logged.
+- Upstream calls (OpenAI, ElevenLabs) time out with a clear message instead of Vercel's
+  30-second error page; cut-off model answers are retried (JSON) or end on a whole sentence
+  (briefings); text over 2,000 characters skips Text to Dialogue (its cap).
+- Dictation stops on its own at 3 minutes (64 kbps) and the transcription limit fits under
+  Vercel's 4.5 MB request cap.
+- A late address lookup no longer moves the pin back; the storefront skeleton shows while it
+  loads; the landing page no longer scrolls sideways on phones.
+
+### Changed
+- **Custom domain: https://www.901safety.com** (the bare `901safety.com` redirects to `www`). `dmc-safety-dashboard.vercel.app` 308-redirects there, path and query kept, except `/api/*`. Passkeys: `RP_ID=901safety.com`, `RP_ORIGIN` lists both origins (now a comma-separated list) — passkeys made on the old domain must be added again once. `SITE_URL` / `VITE_SITE_URL`, the Supabase Site URL, redirect allow-list and email-hook address, canonical / Open Graph URLs and the film's QR codes all use the new domain.
+- **New link-preview cards** for the site and the film page: Downtown Memphis at blue hour (artwork generated with Higgsfield, no text in it) with the name, the self-regulated promise, the features, the 911 line and a real QR code to 901safety.com drawn on top (`scripts/og-images.mjs`).
+- The landing and business-home skyline is now a photograph of Downtown Memphis (`public/brand/memphis-skyline.jpg`) instead of a generated picture on a third-party CDN.
+- **No "AI" in the product's words.** It is presented as *a self-regulated safety
+  dashboard*: "Report by voice" (an automated voice interview), "Organize my notes",
+  "Filled in from your notes", "Summarized from the last N hours"; vendor names left the
+  public pages (they stay in the admin System panel).
+- API test harness: 45 → 53 checks (Text to Dialogue cap, unreadable / cut-off model
+  answers, email-hook fail-closed, replay and signature).
+
+## [0.3.0] — 2026-10-08 — Downtown Safety Dashboard redesign 🏙️
+
+A ground-up rebuild around one job: **local businesses report what they see, and Downtown
+public-safety officers see it instantly.** New information architecture, design system,
+incident model, voice stack and imagery.
+
+### Added
+- **Report Center** for businesses and officers with three paths:
+  - **Voice interview (OpenAI GPT-Live)** — a two-way interviewer with a business persona
+    (knows the caller's storefront from the database) and an officer persona; asks one
+    question at a time, tells anyone in danger to call 9-1-1, answers Spanish callers in
+    Spanish, and files a structured report through the `file_incident_report` tool on its
+    Responses backend. Live transcript, voice orb, mute, and a review step before sending.
+  - **Guided form** — what / where / when / who / details, with a location picker (your
+    storefront, GPS, search or a draggable pin), people and vehicle editors, photos (compressed,
+    private bucket), dictation, **"Organize with AI"**, and optional spoken prompts.
+  - **Quick alert** — category + location in two taps.
+  - A review screen with a suggested priority, share-with-community / contact toggles, and a
+    confirmation that is read back in an ElevenLabs voice.
+- **Operations Center** for officers: live P1–P4 queue with new-report flashes, filters and
+  search, district map with heat / BOLO / business layers, activity stream, KPIs, report
+  detail with acknowledge → responding → resolved (with outcome), priority, assignment,
+  internal or public notes, directions, "Listen", and one-click BOLOs.
+- **Spoken alerts (ElevenLabs Eleven v4)** for new reports above a per-user priority
+  threshold, plus an AI **shift briefing** (`/api/briefing`) read aloud.
+- **`/api/tts`** — Eleven v4 via the Text to Dialogue API, falling back to text-to-speech and
+  then `ELEVENLABS_FALLBACK_MODEL`; voice list from the account (or a curated set); per-user
+  voice choice; browser speech as the last resort.
+- **Lookout board** (BOLOs with sightings), **Insights** (trends, categories, hot spots,
+  response times), redesigned **Administration** and **Settings** (voice + alert preferences).
+- **Business home**: my reports with live status, nearby community alerts, storefront map.
+- **Migration `0002_incidents_bolos.sql`** — incident fields (title, priority, flags, subjects,
+  vehicles, photos, assignment, visibility, contact), the `report_updates` timeline with
+  internal notes, `bolos` + sightings, the private `report-media` bucket, RLS, and Realtime.
+- **Schema detection** so the new UI keeps writing legacy-format reports until `0002` runs.
+- **Demo mode** rebuilt: realistic downtown dataset, role switcher, simulated incoming reports.
+- **Higgsfield imagery** (skyline hero, Main Street, spot illustrations) served through Vercel
+  Image Optimization (`vercel.json` → `images`).
+- `npm run test:api` — mocked-upstream harness for the TTS, live-session, briefing and
+  extraction functions.
+
+### Changed
+- New design system (navy + gold tokens, light/dark, Inter + JetBrains Mono), app shell with
+  desktop sidebar and phone bottom tabs with a centre Report button, toasts, dialogs, sheets.
+- Expanded taxonomy: 16 categories in four groups with default priorities.
+- `/api/reports/extract` returns structured people, vehicles and flags; `/api/transcribe` is
+  open to businesses; `/api/live-session` serves both personas.
+- Stale-chunk guard reloads an open tab once after a redeploy.
+
+### Removed
+- The old single-page dashboard, officer portal, alert context and mock data (replaced by the
+  pages and contexts above). `/officer` now redirects to `/report`.
+
+## [0.2.1] — 2026-09-10 — Voice on OpenAI GPT-Live-1 (raw full duplex) 🎙️
 
 The officer voice report moved from OpenAI Realtime (`gpt-realtime`) to the new **Live API**
 (`gpt-live-1`) — a transport migration, not a model swap.

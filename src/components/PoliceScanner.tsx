@@ -1,36 +1,26 @@
 import { useRef, useState } from 'react';
-import { RadioTower, Play, Pause, Volume2, ExternalLink, Loader2 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
+import { ExternalLink, LoaderCircle, Pause, Play, RadioTower, Volume2 } from 'lucide-react';
+import { cn } from '../lib/format';
 
 const FEED_ID = (import.meta.env.VITE_BROADCASTIFY_FEED_ID as string) || '215';
 // Broadcastify's own web player streams this CORS-open (`access-control-allow-origin: *`)
-// Icecast MP3 mount, so we can play it inline in our own <audio> with no popup/iframe.
-// An explicit VITE_BROADCASTIFY_STREAM_URL (e.g. a Premium relay) still wins if set.
+// Icecast MP3 mount, so it plays inline in our own <audio>. An explicit
+// VITE_BROADCASTIFY_STREAM_URL (e.g. a Premium relay) wins if set.
 const STREAM_URL =
-  (import.meta.env.VITE_BROADCASTIFY_STREAM_URL as string | undefined) ||
-  `https://broadcastify.cdnstream1.com/${FEED_ID}`;
+  (import.meta.env.VITE_BROADCASTIFY_STREAM_URL as string | undefined) || `https://broadcastify.cdnstream1.com/${FEED_ID}`;
 const LISTEN_URL = `https://www.broadcastify.com/listen/feed/${FEED_ID}`;
 const PLAYER_URL = `https://www.broadcastify.com/webPlayer/${FEED_ID}`;
 
 /**
- * Live City of Memphis Police Department scanner (Broadcastify feed 215 —
- * "Memphis Police & Shelby County Sheriff").
- *
- * If VITE_BROADCASTIFY_STREAM_URL is set (a Broadcastify Premium / relay direct
- * stream; CORS is open on the stream) we play it inline with custom controls.
- * Otherwise we launch the official Broadcastify player in a compact popup,
- * which keeps us within their terms while still putting the audio one tap away.
+ * Live Memphis PD / Shelby County Sheriff scanner (Broadcastify feed 215),
+ * played inline; falls back to the official popup player if the stream fails.
  */
-export default function PoliceScanner() {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
+export default function PoliceScanner({ variant = 'card', className }: { variant?: 'card' | 'bar'; className?: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [volume, setVolume] = useState(0.85);
-
-  const inlineMode = Boolean(STREAM_URL) && !failed;
+  const [volume, setVolume] = useState(0.8);
 
   const toggle = async () => {
     const el = audioRef.current;
@@ -53,74 +43,51 @@ export default function PoliceScanner() {
   };
 
   const openPlayer = () => {
-    const win = window.open(
-      PLAYER_URL,
-      'mpd-scanner',
-      'width=460,height=240,menubar=no,toolbar=no,location=no',
-    );
+    const win = window.open(PLAYER_URL, 'mpd-scanner', 'width=460,height=240,menubar=no,toolbar=no,location=no');
     if (!win) window.open(LISTEN_URL, '_blank', 'noopener,noreferrer');
   };
 
-  return (
-    <div
-      className={`px-3 py-2.5 border-b ${dark ? 'border-white/5 bg-white/[0.02]' : 'border-neutral-100 bg-neutral-50/60'}`}
+  const button = failed ? (
+    <button
+      onClick={openPlayer}
+      className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-[13px] font-semibold text-primary-ink hover:bg-primary-hover"
     >
-      <div className="flex items-center gap-2.5">
-        <div className="relative flex-shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-navy-600 flex items-center justify-center">
-            <RadioTower className="w-4.5 h-4.5 text-gold-400" />
-          </div>
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white dark:border-neutral-900 animate-pulse" />
-        </div>
+      <ExternalLink className="h-3.5 w-3.5" /> Open player
+    </button>
+  ) : (
+    <button
+      onClick={() => void toggle()}
+      className={cn(
+        'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-colors',
+        playing ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-primary text-primary-ink hover:bg-primary-hover',
+      )}
+      aria-label={playing ? 'Pause scanner' : 'Play scanner'}
+    >
+      {loading ? <LoaderCircle className="h-5 w-5 animate-spin" /> : playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+    </button>
+  );
 
+  return (
+    <div className={cn(variant === 'card' ? 'card p-3.5' : '', className)}>
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-navy-600 text-gold-300">
+          <RadioTower className="h-5 w-5" />
+          {playing && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse rounded-full border-2 border-surface bg-red-500" />}
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="fluid-text-sm font-bold truncate">Memphis PD Scanner</p>
-            <span className={`fluid-text-xs font-mono flex-shrink-0 ${dark ? 'text-neutral-600' : 'text-neutral-400'}`}>
-              #{FEED_ID}
-            </span>
-          </div>
-          <p className={`fluid-text-xs truncate ${dark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-            MPD &amp; Shelby County Sheriff · live
+          <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-ink">
+            Memphis PD scanner
+            <span className="font-mono text-[11px] font-normal text-subtle">#{FEED_ID}</span>
+          </p>
+          <p className="truncate text-[12px] text-muted">
+            {playing ? 'Live · MPD & Shelby County Sheriff' : 'MPD & Shelby County Sheriff · via Broadcastify'}
           </p>
         </div>
-
-        {inlineMode ? (
-          <button
-            onClick={toggle}
-            className={`tap-target flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-colors ${
-              playing
-                ? 'bg-red-600 text-white'
-                : dark
-                  ? 'bg-gold-500 text-navy-900 hover:bg-gold-400'
-                  : 'bg-navy-600 text-white hover:bg-navy-700'
-            }`}
-            aria-label={playing ? 'Pause scanner' : 'Play scanner'}
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : playing ? (
-              <Pause className="w-5 h-5" />
-            ) : (
-              <Play className="w-5 h-5" />
-            )}
-          </button>
-        ) : (
-          <button
-            onClick={openPlayer}
-            className={`tap-target flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0 font-semibold fluid-text-xs transition-colors ${
-              dark ? 'bg-gold-500 text-navy-900 hover:bg-gold-400' : 'bg-navy-600 text-white hover:bg-navy-700'
-            }`}
-          >
-            <Play className="w-3.5 h-3.5" />
-            Listen
-          </button>
-        )}
+        {button}
       </div>
-
-      {inlineMode && playing && (
-        <div className="flex items-center gap-2 mt-2 pl-11">
-          <Volume2 className={`w-3.5 h-3.5 flex-shrink-0 ${dark ? 'text-neutral-500' : 'text-neutral-400'}`} />
+      {playing && (
+        <div className="mt-2.5 flex items-center gap-2 pl-[52px]">
+          <Volume2 className="h-3.5 w-3.5 flex-shrink-0 text-subtle" />
           <input
             type="range"
             min={0}
@@ -132,36 +99,24 @@ export default function PoliceScanner() {
               setVolume(v);
               if (audioRef.current) audioRef.current.volume = v;
             }}
-            className="flex-1 accent-gold-500 h-1"
+            className="h-1 flex-1 accent-[var(--accent)]"
             aria-label="Scanner volume"
           />
         </div>
       )}
-
-      {!inlineMode && (
-        <a
-          href={LISTEN_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-flex items-center gap-1 mt-1.5 pl-11 fluid-text-xs ${dark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-400 hover:text-neutral-600'}`}
-        >
-          via Broadcastify <ExternalLink className="w-3 h-3" />
-        </a>
-      )}
-
-      {STREAM_URL && (
-        <audio
-          ref={audioRef}
-          src={STREAM_URL}
-          preload="none"
-          onError={() => {
+      <audio
+        ref={audioRef}
+        src={STREAM_URL}
+        preload="none"
+        onError={() => {
+          if (audioRef.current?.src) {
             setFailed(true);
             setPlaying(false);
-          }}
-          onPause={() => setPlaying(false)}
-          onPlaying={() => setPlaying(true)}
-        />
-      )}
+          }
+        }}
+        onPause={() => setPlaying(false)}
+        onPlaying={() => setPlaying(true)}
+      />
     </div>
   );
 }

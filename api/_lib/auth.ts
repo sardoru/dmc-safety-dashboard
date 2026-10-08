@@ -20,7 +20,13 @@ export async function getUser(req: VercelRequest): Promise<AuthedUser | null> {
   const token = getBearer(req);
   if (!token) return null;
 
-  const admin = getAdmin();
+  // A deployment without Supabase (demo mode) has no users to resolve.
+  let admin: ReturnType<typeof getAdmin>;
+  try {
+    admin = getAdmin();
+  } catch {
+    return null;
+  }
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data.user) return null;
 

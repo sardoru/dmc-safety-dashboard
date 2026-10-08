@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Business, BusinessType } from '../types';
-import { mockBusinesses } from '../data/mockBusinesses';
+import { DEMO_BUSINESSES } from '../data/demo';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,24 +30,20 @@ function rowToBusiness(row: BusinessRow): Business {
   };
 }
 
-// Unique per-subscription suffix. This hook renders in BOTH <Header> and
-// <MapView>, so a fixed channel name ('public:businesses') collides — the
-// second subscriber throws "cannot add postgres_changes callbacks ... after
-// subscribe()", which (pre-ErrorBoundary) white-screened the whole app on login.
+// Unique per-subscription suffix: several components use this hook at once,
+// and a fixed channel name makes the second subscriber throw ("cannot add
+// postgres_changes callbacks … after subscribe()").
 let channelSeq = 0;
+const EMPTY: Business[] = [];
 
-/**
- * Registered businesses for the map/stats. Uses real Supabase rows when
- * connected (live-updating), and the demo set otherwise.
- */
+/** Registered businesses — live from Supabase when connected, the demo set otherwise. */
 export function useBusinesses(): Business[] {
   const { configured, user } = useAuth();
-  const [list, setList] = useState<Business[]>(configured ? [] : mockBusinesses);
+  const [list, setList] = useState<Business[]>(EMPTY);
 
   useEffect(() => {
     if (!configured || !user) return;
     let active = true;
-
     const load = () =>
       supabase
         .from('businesses')
@@ -55,21 +51,17 @@ export function useBusinesses(): Business[] {
         .then(({ data }) => {
           if (active && data) setList(data.map((r) => rowToBusiness(r as BusinessRow)));
         });
-
     void load();
-
     const channel = supabase
       .channel(`businesses-${++channelSeq}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => {
-        void load();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => void load())
       .subscribe();
-
     return () => {
       active = false;
       supabase.removeChannel(channel);
     };
   }, [configured, user]);
 
-  return list;
+  if (!configured) return DEMO_BUSINESSES;
+  return user ? list : EMPTY;
 }

@@ -1,17 +1,11 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { BusinessType, UserProfile } from '../types';
 import { supabase } from '../lib/supabase';
+import { demoBusinessProfile } from '../data/demo';
 import { useAuth } from './AuthContext';
 
 interface ProfileContextType {
-  /** The current user's business, mapped to the dashboard's UserProfile shape. */
+  /** The signed-in business user's storefront. */
   profile: UserProfile | null;
   setProfile: (p: UserProfile | null) => Promise<void>;
   isRegistered: boolean;
@@ -48,63 +42,65 @@ function rowToProfile(row: BusinessRow): UserProfile {
   };
 }
 
-function loadLocal(): UserProfile | null {
+const DEMO_KEY = 'dt-demo-business';
+
+function loadDemoProfile(): UserProfile {
   try {
-    const saved = localStorage.getItem('dmc-profile');
-    return saved ? (JSON.parse(saved) as UserProfile) : null;
+    const saved = localStorage.getItem(DEMO_KEY);
+    if (saved) return JSON.parse(saved) as UserProfile;
   } catch {
-    return null;
+    /* ignore */
   }
+  return demoBusinessProfile();
 }
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const { configured, user } = useAuth();
-  const [profile, setProfileState] = useState<UserProfile | null>(() =>
-    configured ? null : loadLocal(),
-  );
-  const [loading, setLoading] = useState(false);
+  const { configured, user, role } = useAuth();
+  const [connectedProfile, setConnectedProfile] = useState<UserProfile | null>(null);
+  const [demoProfile, setDemoProfile] = useState<UserProfile | null>(() => (configured ? null : loadDemoProfile()));
+  /** Which signed-in user the storefront was loaded for. */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
-  // Load the authenticated user's business from Supabase.
   useEffect(() => {
-    if (!configured) return;
-    if (!user) {
-      setProfileState(null);
-      return;
-    }
+    if (!configured || !user) return;
     let active = true;
-    setLoading(true);
     supabase
       .from('businesses')
       .select('*')
       .eq('owner_id', user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return;
-        setProfileState(data ? rowToProfile(data as BusinessRow) : null);
-        setLoading(false);
+        // A failed read keeps the storefront already on screen.
+        if (error) console.error('[profile] storefront load failed', error);
+        else setConnectedProfile(data ? rowToProfile(data as BusinessRow) : null);
+        setLoadedFor(user.id);
       });
     return () => {
       active = false;
     };
   }, [configured, user]);
 
+  const loading = configured && Boolean(user) && loadedFor !== user?.id;
+
   const setProfile = useCallback(
     async (p: UserProfile | null) => {
-      // Demo mode: localStorage only.
       if (!configured) {
-        setProfileState(p);
-        if (p) localStorage.setItem('dmc-profile', JSON.stringify(p));
-        else localStorage.removeItem('dmc-profile');
+        setDemoProfile(p);
+        try {
+          if (p) localStorage.setItem(DEMO_KEY, JSON.stringify(p));
+          else localStorage.removeItem(DEMO_KEY);
+        } catch {
+          /* ignore */
+        }
         return;
       }
       if (!user) return;
-
       if (!p) {
         await supabase.from('businesses').delete().eq('owner_id', user.id);
-        setProfileState(null);
+        setConnectedProfile(null);
         return;
       }
-
       const { data, error } = await supabase
         .from('businesses')
         .upsert(
@@ -123,15 +119,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         )
         .select()
         .single();
-
       if (error) throw error;
-      if (data) setProfileState(rowToProfile(data as BusinessRow));
+      if (data) setConnectedProfile(rowToProfile(data as BusinessRow));
     },
     [configured, user],
   );
 
+  // Only business accounts have a storefront; signed-out users have none.
+  const profile = configured ? (user ? connectedProfile : null) : role === 'business' ? demoProfile : null;
+
   return (
-    <ProfileContext.Provider value={{ profile, setProfile, isRegistered: !!profile, loading }}>
+    <ProfileContext.Provider value={{ profile, setProfile, isRegistered: Boolean(profile), loading }}>
       {children}
     </ProfileContext.Provider>
   );

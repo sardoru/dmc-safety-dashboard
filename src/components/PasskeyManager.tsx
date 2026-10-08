@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyRound, Plus, Trash2, Loader2, ShieldCheck } from 'lucide-react';
-import {
-  listPasskeys,
-  registerPasskey,
-  deletePasskey,
-  passkeysSupported,
-} from '../lib/passkeys';
+import { KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { deletePasskey, listPasskeys, passkeysSupported, registerPasskey } from '../lib/passkeys';
 import type { PasskeyInfo } from '../types';
-import { useTheme } from '../context/ThemeContext';
-import { formatRelative } from '../utils/helpers';
+import { timeAgo } from '../lib/format';
+import { useNow } from '../hooks/useNow';
+import { Button, IconButton } from './ui/Button';
+import { Banner } from './ui/Feedback';
 
 export default function PasskeyManager() {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
+  const now = useNow();
   const [items, setItems] = useState<PasskeyInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -30,8 +26,21 @@ export default function PasskeyManager() {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    listPasskeys()
+      .then((list) => {
+        if (!cancelled) setItems(list);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load passkeys.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const add = async () => {
     setBusy(true);
@@ -40,11 +49,7 @@ export default function PasskeyManager() {
       await registerPasskey();
       await refresh();
     } catch (err) {
-      setError(
-        err instanceof Error && err.message
-          ? `Could not add passkey: ${err.message}`
-          : 'Passkey setup was cancelled.',
-      );
+      setError(err instanceof Error && err.message ? `Could not add passkey: ${err.message}` : 'Passkey setup was cancelled.');
     } finally {
       setBusy(false);
     }
@@ -64,85 +69,46 @@ export default function PasskeyManager() {
   };
 
   if (!passkeysSupported()) {
-    return (
-      <p className={`fluid-text-sm ${dark ? 'text-neutral-500' : 'text-neutral-500'}`}>
-        This device or browser doesn’t support passkeys. Use the email sign-in link instead.
-      </p>
-    );
+    return <p className="text-sm text-muted">This device or browser doesn’t support passkeys. Use the email sign-in link instead.</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className={`fluid-text-sm ${dark ? 'text-neutral-400' : 'text-neutral-500'}`}>
-          Sign in instantly with Face ID, Touch ID, or your device PIN.
-        </p>
-        <button
-          onClick={add}
-          disabled={busy}
-          className={`tap-target flex items-center gap-1.5 px-3 py-2 rounded-xl font-semibold fluid-text-sm transition-all flex-shrink-0 ${
-            dark ? 'bg-gold-500 hover:bg-gold-400 text-navy-900' : 'bg-navy-600 hover:bg-navy-700 text-white'
-          } ${busy ? 'opacity-70 cursor-wait' : 'active:scale-[0.98]'}`}
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        <p className="text-[13px] leading-snug text-muted">Sign in instantly with Face ID, Touch ID or your device PIN.</p>
+        <Button size="sm" loading={busy} icon={<Plus className="h-4 w-4" />} onClick={() => void add()}>
           Add passkey
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <div className="p-3 rounded-xl bg-red-500/10 text-red-500 fluid-text-sm">{error}</div>
-      )}
+      {error && <Banner tone="danger">{error}</Banner>}
 
       {loading ? (
-        <div className="flex items-center gap-2 py-4 text-neutral-500 fluid-text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading passkeys…
-        </div>
+        <p className="flex items-center gap-2 py-3 text-sm text-muted">
+          <LoaderCircle className="h-4 w-4 animate-spin" /> Loading passkeys…
+        </p>
       ) : items.length === 0 ? (
-        <div
-          className={`flex items-center gap-3 p-4 rounded-xl border border-dashed ${
-            dark ? 'border-white/10 text-neutral-500' : 'border-neutral-200 text-neutral-400'
-          }`}
-        >
-          <KeyRound className="w-5 h-5 flex-shrink-0" />
-          <p className="fluid-text-sm">No passkeys yet. Add one to skip the email link next time.</p>
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-line-strong p-4 text-muted">
+          <KeyRound className="h-5 w-5 flex-shrink-0" />
+          <p className="text-[13px]">No passkeys yet. Add one to skip the email link next time.</p>
         </div>
       ) : (
         <ul className="space-y-2">
           {items.map((pk) => (
-            <li
-              key={pk.id}
-              className={`flex items-center gap-3 p-3 rounded-xl ${
-                dark ? 'bg-white/5' : 'bg-neutral-50'
-              }`}
-            >
-              <div
-                className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  dark ? 'bg-gold-500/15 text-gold-400' : 'bg-navy-50 text-navy-600'
-                }`}
-              >
-                <ShieldCheck className="w-5 h-5" />
-              </div>
+            <li key={pk.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3">
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-strong">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="fluid-text-sm font-medium truncate">{pk.device_label || 'Passkey'}</p>
-                <p className={`fluid-text-xs ${dark ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                  Added {formatRelative(new Date(pk.created_at).getTime())}
-                  {pk.last_used_at && ` · used ${formatRelative(new Date(pk.last_used_at).getTime())}`}
+                <p className="truncate text-sm font-medium text-ink">{pk.device_label || 'Passkey'}</p>
+                <p className="text-[12px] text-muted">
+                  Added {timeAgo(new Date(pk.created_at).getTime(), now)}
+                  {pk.last_used_at && ` · used ${timeAgo(new Date(pk.last_used_at).getTime(), now)}`}
                 </p>
               </div>
-              <button
-                onClick={() => remove(pk.id)}
-                disabled={removing === pk.id}
-                className={`tap-target p-2 rounded-lg flex-shrink-0 transition-colors ${
-                  dark ? 'hover:bg-red-500/15 text-neutral-500 hover:text-red-400' : 'hover:bg-red-50 text-neutral-400 hover:text-red-500'
-                }`}
-                aria-label="Remove passkey"
-              >
-                {removing === pk.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
-              </button>
+              <IconButton label="Remove passkey" size="sm" onClick={() => void remove(pk.id)} disabled={removing === pk.id}>
+                {removing === pk.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </IconButton>
             </li>
           ))}
         </ul>
