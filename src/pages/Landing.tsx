@@ -3,6 +3,7 @@ import {
   ArrowRight,
   AudioLines,
   Building2,
+  CirclePlay,
   Eye,
   Lock,
   Map as MapIcon,
@@ -22,6 +23,8 @@ import { useNow } from '../hooks/useNow';
 import type { Role } from '../types';
 import { isOpen } from '../lib/taxonomy';
 import { cn } from '../lib/format';
+import { FILM_DURATION } from '../film/filmMeta';
+import { formatTime } from '../film/time';
 import Logo, { LogoMark } from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
 import PoliceScanner from '../components/PoliceScanner';
@@ -168,6 +171,11 @@ export default function Landing() {
                 </Link>
               )}
             </div>
+            {FILM_DURATION > 0 && (
+              <a href="/how-it-works" className="mt-5 flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
+              </a>
+            )}
             <a href="tel:911" className="mt-6 inline-flex items-center gap-2 text-[13px] font-semibold text-white/85 hover:text-white">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600">
                 <Phone className="h-3.5 w-3.5" />
@@ -342,6 +350,13 @@ export default function Landing() {
                 <li>
                   <a href="#how" className="hover:text-ink">How it works</a>
                 </li>
+                {FILM_DURATION > 0 && (
+                  <li>
+                    <a href="/how-it-works" className="hover:text-ink">
+                      Watch the film · {formatTime(FILM_DURATION)}
+                    </a>
+                  </li>
+                )}
               </ul>
             </div>
           </div>
