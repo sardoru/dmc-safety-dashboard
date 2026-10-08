@@ -1,7 +1,7 @@
 # Core Downtown Memphis Safety Dashboard
 
-A shared safety dashboard for **Downtown Memphis**. Local businesses report suspicious people,
-suspicious activity and crimes they see — by **talking to an AI interviewer**, filling a
+A **self-regulated safety dashboard** for **Downtown Memphis**. Local businesses report suspicious people,
+suspicious activity and crimes they see — by a **short voice interview**, filling a
 two-minute guided form, or sending a one-tap alert — and every report lands instantly on the
 **Operations Center** that Downtown public-safety officers monitor. Officers triage, respond,
 publish be-on-the-lookout notices, and **hear new reports read aloud**.
@@ -14,8 +14,8 @@ publish be-on-the-lookout notices, and **hear new reports read aloud**.
 
 | Who | What they get |
 | --- | --- |
-| **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: the **GPT-Live voice interviewer** (two-way, they just talk), a **guided form** that can read its questions aloud and organise dictated text with AI, or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a read-back confirmation in an ElevenLabs voice. |
-| **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and an AI **shift briefing** read aloud. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
+| **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: **Report by voice** (an automated two-way interview — they just talk), a **guided form** that can read its questions aloud and organise dictated notes ("Organize my notes"), or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a spoken read-back confirmation. |
+| **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and a spoken **shift briefing** summarised from the last hours. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
 | **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (officer invites, team, businesses, system status). |
 
 The app is fully responsive (phone bottom-tab layout with a centre **Report** button; desktop
@@ -100,7 +100,9 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   reports, invites, passkeys) and [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql)
   (incident fields — title, priority, subjects, vehicles, photos, assignment, visibility —
   the `report_updates` timeline, `bolos` with sightings, the private `report-media` photo
-  bucket, and the RLS that goes with them).
+  bucket, and the RLS that goes with them), then [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql)
+  (who may write what: the database stamps who filed a report, keeps the officer workflow
+  officer-only, and lets members edit only their display name).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -118,9 +120,10 @@ writing reports in the original format, so deploying the new UI before migrating
 ### 1. Supabase
 1. Create a project at [supabase.com](https://supabase.com).
 2. Apply the migrations in order — `supabase db push` with the CLI linked, **or** paste
-   [`0001_init.sql`](./supabase/migrations/0001_init.sql) and then
-   [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql) into the SQL
-   editor. `0002` is idempotent and keeps existing reports.
+   [`0001_init.sql`](./supabase/migrations/0001_init.sql), then
+   [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql), then
+   [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql) into the SQL
+   editor. `0002` and `0003` are idempotent and keep existing data.
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 

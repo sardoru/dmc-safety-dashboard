@@ -3,6 +3,64 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.3.1] — 2026-10-08 — Security + correctness review of the redesign
+
+A full review of 0.3.0 (API/RLS security, frontend correctness, voice integrations) after it
+went live. **Needs migration `0003_write_guards.sql`** (safe to run more than once; tested
+against production in a rolled-back transaction — 15/15 scenarios).
+
+### Security
+- **Passkey sign-in could take over any account, including the admin** (present since the
+  June build). `/api/passkeys/auth/verify` minted a session for `profiles.email`, which every
+  member could rewrite. It now signs in by the email on the passkey owner's auth account
+  (`auth.admin.getUserById`). In the database, members can update only `display_name`
+  (admins: `role`) — hotfixed in production on 2026-10-08, recorded in `0003`.
+- **Reports can't be forged** (`0003`): the database stamps `reporter_id`, `source` and the
+  member's own storefront name on every report a member files; status, priority,
+  assignment and timestamps stay officer-only (a member's only change to a report is
+  marking it seen); timeline entries from members are plain notes in their own name (the
+  "Report received …" receipt excepted). The insert policy no longer accepts reports
+  without a reporter.
+- The Supabase email hook **fails closed** without `SEND_EMAIL_HOOK_SECRET` and refuses
+  signatures older or newer than 5 minutes (replays).
+- Photos only render from our own storage (or inline images) — no outside URLs or tracking
+  pixels; signed photo URLs are forgotten on sign-out; a malformed description in a report
+  no longer crashes the officer's view.
+- `mark_report_seen()` is no longer executable by `anon`.
+
+### Fixed
+- **Coming back to the tab no longer reloads everything or signs officers out of their
+  role**: `user` stays the same object while the account is the same, and a failed profile /
+  report / lookout / storefront read keeps what is on screen.
+- **"Organize my notes"** (was "Organize with AI") fills only what the reporter left empty
+  and never clears a ticked weapon / injury / happening-now flag; an unreadable or keyless
+  answer saves the text only instead of posing as "Suspicious Activity · P3".
+- A note that fails to save stays in the box with a "Note not saved" message.
+- The voice transcript survives Back from the review step.
+- Reports aren't filed in the legacy shape before the schema check finishes; a check
+  violation no longer switches the session to legacy writes.
+- Businesses see a lookout disappear when it's cleared (they can read it for a day after);
+  a sighting only counts against an active lookout.
+- Inviting an existing account as officer/admin actually sets the role (the role guard
+  reverted server-side changes).
+- The voice interview doesn't greet over a caller who speaks first; the report tool has room
+  for a full report (`max_output_tokens` 500 → 1200); backend failures are logged.
+- Upstream calls (OpenAI, ElevenLabs) time out with a clear message instead of Vercel's
+  30-second error page; cut-off model answers are retried (JSON) or end on a whole sentence
+  (briefings); text over 2,000 characters skips Text to Dialogue (its cap).
+- Dictation stops on its own at 3 minutes (64 kbps) and the transcription limit fits under
+  Vercel's 4.5 MB request cap.
+- A late address lookup no longer moves the pin back; the storefront skeleton shows while it
+  loads; the landing page no longer scrolls sideways on phones.
+
+### Changed
+- **No "AI" in the product's words.** It is presented as *a self-regulated safety
+  dashboard*: "Report by voice" (an automated voice interview), "Organize my notes",
+  "Filled in from your notes", "Summarized from the last N hours"; vendor names left the
+  public pages (they stay in the admin System panel).
+- API test harness: 45 → 53 checks (Text to Dialogue cap, unreadable / cut-off model
+  answers, email-hook fail-closed, replay and signature).
+
 ## [0.3.0] — 2026-10-08 — Downtown Safety Dashboard redesign 🏙️
 
 A ground-up rebuild around one job: **local businesses report what they see, and Downtown
