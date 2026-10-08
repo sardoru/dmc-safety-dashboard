@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { EmailOtpType } from '@supabase/supabase-js';
+import { TriangleAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import AuthShell from '../components/auth/AuthShell';
 import { LoadingScreen } from '../components/auth/AuthStates';
+import { LogoMark } from '../components/brand/Logo';
+import { buttonClasses } from '../components/ui/styles';
 
 export default function AuthCallback() {
   const [params] = useSearchParams();
@@ -40,24 +42,24 @@ export default function AuthCallback() {
     })();
   }, [params, navigate]);
 
-  if (error) {
-    return (
-      <AuthShell
-        title="Sign-in link problem"
-        subtitle={error}
-        footer={
-          <a href="/login" className="hover:underline">
-            Back to sign in
-          </a>
-        }
-      >
-        <div className="p-3 rounded-xl bg-red-500/10 text-red-500 fluid-text-sm">
-          Magic links can only be used once and expire after an hour. Request a fresh link from the
-          sign-in page.
-        </div>
-      </AuthShell>
-    );
-  }
+  if (!error) return <LoadingScreen label="Signing you in…" />;
 
-  return <LoadingScreen label="Signing you in…" />;
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-bg px-4">
+      <div className="card w-full max-w-md p-7 text-center">
+        <LogoMark className="mx-auto mb-5 h-12 w-12" />
+        <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300">
+          <TriangleAlert className="h-5 w-5" />
+        </span>
+        <h1 className="text-lg font-bold text-ink">Sign-in link problem</h1>
+        <p className="mt-2 text-sm text-muted">{error}</p>
+        <p className="mt-3 text-[13px] text-subtle">
+          Magic links can only be used once and expire after an hour. Request a fresh link from the sign-in page.
+        </p>
+        <Link to="/login" className={buttonClasses({ className: 'mt-6' })}>
+          Back to sign in
+        </Link>
+      </div>
+    </div>
+  );
 }

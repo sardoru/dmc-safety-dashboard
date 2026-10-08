@@ -3,7 +3,60 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [Unreleased] — Voice on OpenAI GPT-Live-1 (raw full duplex) 🎙️
+## [0.3.0] — 2026-10-08 — Downtown Safety Dashboard redesign 🏙️
+
+A ground-up rebuild around one job: **local businesses report what they see, and Downtown
+public-safety officers see it instantly.** New information architecture, design system,
+incident model, voice stack and imagery.
+
+### Added
+- **Report Center** for businesses and officers with three paths:
+  - **Voice interview (OpenAI GPT-Live)** — a two-way interviewer with a business persona
+    (knows the caller's storefront from the database) and an officer persona; asks one
+    question at a time, tells anyone in danger to call 9-1-1, answers Spanish callers in
+    Spanish, and files a structured report through the `file_incident_report` tool on its
+    Responses backend. Live transcript, voice orb, mute, and a review step before sending.
+  - **Guided form** — what / where / when / who / details, with a location picker (your
+    storefront, GPS, search or a draggable pin), people and vehicle editors, photos (compressed,
+    private bucket), dictation, **"Organize with AI"**, and optional spoken prompts.
+  - **Quick alert** — category + location in two taps.
+  - A review screen with a suggested priority, share-with-community / contact toggles, and a
+    confirmation that is read back in an ElevenLabs voice.
+- **Operations Center** for officers: live P1–P4 queue with new-report flashes, filters and
+  search, district map with heat / BOLO / business layers, activity stream, KPIs, report
+  detail with acknowledge → responding → resolved (with outcome), priority, assignment,
+  internal or public notes, directions, "Listen", and one-click BOLOs.
+- **Spoken alerts (ElevenLabs Eleven v4)** for new reports above a per-user priority
+  threshold, plus an AI **shift briefing** (`/api/briefing`) read aloud.
+- **`/api/tts`** — Eleven v4 via the Text to Dialogue API, falling back to text-to-speech and
+  then `ELEVENLABS_FALLBACK_MODEL`; voice list from the account (or a curated set); per-user
+  voice choice; browser speech as the last resort.
+- **Lookout board** (BOLOs with sightings), **Insights** (trends, categories, hot spots,
+  response times), redesigned **Administration** and **Settings** (voice + alert preferences).
+- **Business home**: my reports with live status, nearby community alerts, storefront map.
+- **Migration `0002_incidents_bolos.sql`** — incident fields (title, priority, flags, subjects,
+  vehicles, photos, assignment, visibility, contact), the `report_updates` timeline with
+  internal notes, `bolos` + sightings, the private `report-media` bucket, RLS, and Realtime.
+- **Schema detection** so the new UI keeps writing legacy-format reports until `0002` runs.
+- **Demo mode** rebuilt: realistic downtown dataset, role switcher, simulated incoming reports.
+- **Higgsfield imagery** (skyline hero, Main Street, spot illustrations) served through Vercel
+  Image Optimization (`vercel.json` → `images`).
+- `npm run test:api` — mocked-upstream harness for the TTS, live-session, briefing and
+  extraction functions.
+
+### Changed
+- New design system (navy + gold tokens, light/dark, Inter + JetBrains Mono), app shell with
+  desktop sidebar and phone bottom tabs with a centre Report button, toasts, dialogs, sheets.
+- Expanded taxonomy: 16 categories in four groups with default priorities.
+- `/api/reports/extract` returns structured people, vehicles and flags; `/api/transcribe` is
+  open to businesses; `/api/live-session` serves both personas.
+- Stale-chunk guard reloads an open tab once after a redeploy.
+
+### Removed
+- The old single-page dashboard, officer portal, alert context and mock data (replaced by the
+  pages and contexts above). `/officer` now redirects to `/report`.
+
+## [0.2.1] — 2026-09-10 — Voice on OpenAI GPT-Live-1 (raw full duplex) 🎙️
 
 The officer voice report moved from OpenAI Realtime (`gpt-realtime`) to the new **Live API**
 (`gpt-live-1`) — a transport migration, not a model swap.

@@ -1,64 +1,33 @@
-import { Loader2, Lock, ShieldAlert, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { useTheme } from '../../context/ThemeContext';
-import AuthShell from './AuthShell';
+import { LoaderCircle, ShieldAlert } from 'lucide-react';
+import { LogoMark } from '../brand/Logo';
+import { ButtonLink } from '../ui/Button';
 
 export function LoadingScreen({ label = 'Loading…' }: { label?: string }) {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
   return (
-    <div
-      className={`min-h-dvh flex flex-col items-center justify-center gap-3 ${
-        dark ? 'bg-surface-dark text-neutral-400' : 'bg-surface-light text-neutral-500'
-      }`}
-    >
-      <Loader2 className="w-6 h-6 animate-spin text-gold-500" />
-      <p className="fluid-text-sm">{label}</p>
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-bg text-muted">
+      <LogoMark className="h-12 w-12" />
+      <p className="inline-flex items-center gap-2 text-sm">
+        <LoaderCircle className="h-4 w-4 animate-spin text-accent" aria-hidden />
+        {label}
+      </p>
     </div>
-  );
-}
-
-export function NotConfiguredNotice() {
-  return (
-    <AuthShell
-      title="Backend not connected yet"
-      subtitle="Accounts and the officer portal activate once Supabase is configured for this deployment."
-      footer={
-        <Link to="/" className="inline-flex items-center gap-1.5 hover:underline">
-          <ArrowLeft className="w-4 h-4" /> Back to the dashboard (demo mode)
-        </Link>
-      }
-    >
-      <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 text-amber-600">
-        <Lock className="w-5 h-5 mt-0.5 flex-shrink-0" />
-        <p className="fluid-text-sm">
-          Add <code className="font-mono">VITE_SUPABASE_URL</code> and{' '}
-          <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> (plus the server keys) to enable
-          sign-in, business accounts, and the public-safety officer tools.
-        </p>
-      </div>
-    </AuthShell>
   );
 }
 
 export function UnauthorizedNotice() {
   return (
-    <AuthShell
-      title="Officer access required"
-      subtitle="This area is limited to public-safety officers. Ask an administrator to invite your email."
-      footer={
-        <Link to="/" className="inline-flex items-center gap-1.5 hover:underline">
-          <ArrowLeft className="w-4 h-4" /> Back to the dashboard
-        </Link>
-      }
-    >
-      <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 text-red-500">
-        <ShieldAlert className="w-5 h-5 mt-0.5 flex-shrink-0" />
-        <p className="fluid-text-sm">
-          Your account doesn’t have the officer role. If you were invited, sign out and back in to
-          refresh your permissions.
-        </p>
-      </div>
-    </AuthShell>
+    <div className="mx-auto flex max-w-md flex-col items-center px-6 py-20 text-center">
+      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+        <ShieldAlert className="h-7 w-7" />
+      </span>
+      <h1 className="text-xl font-bold text-ink">Officer access required</h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        This area is limited to Downtown public-safety officers. If you were invited, sign out and back in to refresh your
+        permissions, or ask an administrator to invite your email.
+      </p>
+      <ButtonLink to="/" variant="secondary" className="mt-6">
+        Back to your dashboard
+      </ButtonLink>
+    </div>
   );
 }

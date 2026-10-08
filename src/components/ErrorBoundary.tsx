@@ -15,8 +15,7 @@ interface State {
 /**
  * Catches render/lifecycle errors in a subtree so a single failing component
  * (e.g. the Leaflet map) shows a localized fallback instead of white-screening
- * the entire app. React has no built-in equivalent — without a boundary an
- * uncaught error unmounts the whole tree.
+ * the entire app.
  */
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
@@ -26,8 +25,6 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Surface the real message + component stack (otherwise React 19 routes
-    // uncaught errors to window.onerror where console tooling can miss them).
     console.error(
       `[ErrorBoundary${this.props.label ? `:${this.props.label}` : ''}]`,
       error?.message,
@@ -40,26 +37,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     const { error } = this.state;
-    if (error) {
-      return this.props.fallback?.(error, this.reset) ?? <DefaultFallback error={error} reset={this.reset} />;
-    }
-    return this.props.children;
-  }
-}
-
-function DefaultFallback({ error, reset }: { error: Error; reset: () => void }) {
-  return (
-    <div className="h-full w-full flex items-center justify-center p-6">
-      <div className="max-w-sm text-center">
-        <p className="font-semibold text-navy-600 dark:text-gold-400">Something went wrong here</p>
-        <p className="mt-1 fluid-text-sm text-neutral-500 break-words">{error.message}</p>
-        <button
-          onClick={reset}
-          className="mt-3 px-4 py-2 rounded-xl bg-navy-600 text-white fluid-text-sm hover:bg-navy-700"
-        >
-          Try again
-        </button>
+    if (!error) return this.props.children;
+    if (this.props.fallback) return this.props.fallback(error, this.reset);
+    return (
+      <div className="flex h-full w-full items-center justify-center p-6">
+        <div className="max-w-sm text-center">
+          <p className="font-semibold text-ink">Something went wrong here</p>
+          <p className="mt-1 break-words text-[13px] text-muted">{error.message}</p>
+          <button
+            onClick={this.reset}
+            className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-ink hover:bg-primary-hover"
+          >
+            Try again
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 }

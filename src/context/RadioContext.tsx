@@ -1,8 +1,11 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { RadioEntry, WsStatus, ConnectionMode } from '../types';
-import { generateId } from '../utils/helpers';
+import { generateId } from '../lib/format';
+import { classifyUrgency } from '../lib/urgency';
 
-const WS_URL = import.meta.env.VITE_RADIO_WS_URL || 'ws://localhost:8765';
+/** The self-hosted scanner-transcription bridge. Unset = feature off (no reconnect loop). */
+const WS_URL = (import.meta.env.VITE_RADIO_WS_URL as string | undefined) || '';
+export const RADIO_BRIDGE_ENABLED = Boolean(WS_URL);
 const MAX_ENTRIES = 200;
 const MAX_BACKOFF = 30_000;
 
@@ -17,25 +20,6 @@ interface RadioContextType {
 
 const RadioContext = createContext<RadioContextType | null>(null);
 
-/** Heuristic urgency from a transcription or report's text. */
-export function classifyUrgency(text: string): RadioEntry['urgency'] {
-  const lower = text.toLowerCase();
-  if (
-    /10-52|code red|emergency|robbery|armed|fire alarm|10-70|backup requested|medical emergency|weapon|assault|shooting/i.test(
-      lower,
-    )
-  ) {
-    return 'emergency';
-  }
-  if (
-    /be advised|suspicious|complaint|heads up|erratic|noise|unverified|fender bender|theft|trespass|disturbance|vandalism/i.test(
-      lower,
-    )
-  ) {
-    return 'caution';
-  }
-  return 'routine';
-}
 
 /**
  * Live police-scanner transcription feed from the self-hosted radio-transcriptor
@@ -47,7 +31,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<RadioEntry[]>(() => []);
   const [isLive, setIsLive] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [wsStatus, setWsStatus] = useState<WsStatus>('connecting');
+  const [wsStatus, setWsStatus] = useState<WsStatus>(WS_URL ? 'connecting' : 'disconnected');
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,7 +52,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
   // ---------- WebSocket (real transcription bridge only) ----------
   const connect = useCallback(() => {
-    if (!isLiveRef.current) return;
+    if (!WS_URL || !isLiveRef.current) return;
     if (
       wsRef.current &&
       (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)

@@ -1,33 +1,35 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigured, SITE_URL } from '../lib/supabase';
+import { DEMO_PERSONAS } from '../data/demo';
 import type { Profile, Role } from '../types';
 
 interface AuthContextType {
-  /** Whether real Supabase credentials are configured (vs. demo mode). */
+  /** Real Supabase credentials are configured (vs. demo mode). */
   configured: boolean;
+  isDemo: boolean;
   loading: boolean;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   role: Role | null;
+  /** Signed in (connected) or a demo role picked (demo). */
+  signedIn: boolean;
+  /** Stable id for the acting user (Supabase uid or a demo persona id). */
+  userId: string | null;
+  displayName: string;
+  email: string | null;
   isOfficer: boolean;
   isAdmin: boolean;
-  /** Send a branded magic-link sign-in email. */
   sendMagicLink: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Demo mode only: act as a business / officer / admin (null = signed out). */
+  setDemoRole: (role: Role | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const DEMO_ROLE_KEY = 'dt-demo-role';
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
   // The handle_new_user trigger creates the profile row; retry briefly in case
@@ -45,10 +47,20 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   return null;
 }
 
+function readDemoRole(): Role | null {
+  try {
+    const v = localStorage.getItem(DEMO_ROLE_KEY);
+    return v === 'business' || v === 'officer' || v === 'admin' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(supabaseConfigured);
+  const [demoRole, setDemoRoleState] = useState<Role | null>(() => (supabaseConfigured ? null : readDemoRole()));
   const mounted = useRef(true);
 
   const loadProfile = useCallback(async (s: Session | null) => {
@@ -62,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mounted.current = true;
-    // Demo mode: loading already initializes to false (supabaseConfigured).
     if (!supabaseConfigured) return;
 
     supabase.auth.getSession().then(async ({ data }) => {
@@ -86,39 +97,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendMagicLink = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: `${SITE_URL}/auth/callback`,
-        shouldCreateUser: true,
-      },
+      options: { emailRedirectTo: `${SITE_URL}/auth/callback`, shouldCreateUser: true },
     });
     if (error) throw error;
   }, []);
 
+  const setDemoRole = useCallback((role: Role | null) => {
+    setDemoRoleState(role);
+    try {
+      if (role) localStorage.setItem(DEMO_ROLE_KEY, role);
+      else localStorage.removeItem(DEMO_ROLE_KEY);
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
+    if (!supabaseConfigured) {
+      setDemoRole(null);
+      return;
+    }
     await supabase.auth.signOut();
     setProfile(null);
-  }, []);
+  }, [setDemoRole]);
 
   const refreshProfile = useCallback(async () => {
     await loadProfile(session);
   }, [loadProfile, session]);
 
-  const role = profile?.role ?? null;
+  const isDemo = !supabaseConfigured;
+  const role: Role | null = isDemo ? demoRole : (profile?.role ?? null);
+  const persona = isDemo && demoRole ? DEMO_PERSONAS[demoRole] : null;
+  const user = session?.user ?? null;
+  const email = persona?.email ?? user?.email ?? null;
+  const displayName =
+    persona?.name ?? (profile?.display_name || (email ? email.split('@')[0] : '') || 'Account');
 
   return (
     <AuthContext.Provider
       value={{
         configured: supabaseConfigured,
+        isDemo,
         loading,
         session,
-        user: session?.user ?? null,
+        user,
         profile,
         role,
+        signedIn: isDemo ? Boolean(demoRole) : Boolean(session),
+        userId: persona?.id ?? user?.id ?? null,
+        displayName,
+        email,
         isOfficer: role === 'officer' || role === 'admin',
         isAdmin: role === 'admin',
         sendMagicLink,
         signOut,
         refreshProfile,
+        setDemoRole,
       }}
     >
       {children}

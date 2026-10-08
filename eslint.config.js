@@ -20,4 +20,14 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Context modules co-locate a provider with its hook (and small helpers);
+    // fast refresh simply remounts them, which is fine.
+    files: ['src/context/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
+    files: ['api/**/*.ts', 'scripts/**/*.ts'],
+    languageOptions: { globals: globals.node },
+  },
 ])

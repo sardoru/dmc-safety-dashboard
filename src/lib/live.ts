@@ -2,10 +2,47 @@ import { apiFetch } from './api';
 
 export type LiveStatus = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
 
+/** A described person, as the backend's report tool sends it (snake_case). */
+export interface CapturedSubject {
+  age_range?: string;
+  sex?: string;
+  height?: string;
+  build?: string;
+  hair?: string;
+  clothing_top?: string;
+  clothing_bottom?: string;
+  footwear?: string;
+  distinguishing_features?: string;
+  behavior?: string;
+  direction_of_travel?: string;
+}
+
+export interface CapturedVehicle {
+  make?: string;
+  model?: string;
+  color?: string;
+  body_type?: string;
+  plate?: string;
+  plate_state?: string;
+  direction_of_travel?: string;
+  notes?: string;
+}
+
+/** The structured report the interviewer files via its backend tool. */
 export interface CapturedReport {
-  incident_type: string;
+  category: string;
   description: string;
+  priority?: number;
+  title?: string;
+  happening_now?: boolean;
+  at_reporter_location?: boolean;
   location_hint?: string;
+  occurred_at_hint?: string;
+  weapons_seen?: boolean;
+  injuries?: boolean;
+  subjects?: CapturedSubject[];
+  vehicles?: CapturedVehicle[];
+  contact_ok?: boolean;
 }
 
 export interface LiveCallbacks {
@@ -17,6 +54,8 @@ export interface LiveCallbacks {
   /** The backend filed the report — the structured fields for the draft. */
   onReport?: (report: CapturedReport) => void;
   onSpeakingChange?: (assistantSpeaking: boolean) => void;
+  /** ~20×/s: caller mic level and interviewer voice level, 0…1 (for the visualizer). */
+  onLevels?: (user: number, assistant: number) => void;
   onError?: (message: string) => void;
 }
 
@@ -32,6 +71,8 @@ interface LiveSessionResponse {
   sdp: string;
   sessionId: string | null;
   opening: OpeningScript | null;
+  persona?: 'business' | 'officer';
+  tool?: string;
 }
 
 interface ToolCallItem {
@@ -76,7 +117,9 @@ const METER_THRESHOLD = 0.01;
 /** Level-meter hangover: pauses between words shorter than this are not silence. */
 const METER_HANGOVER_MS = 350;
 const TICK_MS = 50;
-const FILE_REPORT_TOOL = 'file_suspicious_report';
+const DEFAULT_REPORT_TOOL = 'file_incident_report';
+/** Hard stop so a forgotten call doesn't run up minutes. */
+const MAX_CALL_MS = 10 * 60_000;
 
 /**
  * Fragments are word pieces that carry their own spacing ("Filed", " as",
@@ -117,7 +160,7 @@ function waitForIceGathering(pc: RTCPeerConnection, ms: number): Promise<void> {
  *   assistant speaks first;
  * - the **transcript**: GPT-Live streams timed word pieces per speaker with no
  *   turn boundaries, so they are stitched into utterances by timeline gap;
- * - the **report tool**: the Responses backend calls `file_suspicious_report`;
+ * - the **report tool**: the Responses backend calls `file_incident_report`;
  *   the browser answers it over the data channel and fills the draft;
  * - a **speaking** readout — a level meter on the remote track — and a graceful
  *   close that waits for the session's final usage.
@@ -130,6 +173,12 @@ export class LiveSession {
   private audioEl: HTMLAudioElement | null = null;
   private audioCtx: AudioContext | null = null;
   private meter: { analyser: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null = null;
+  private micMeter: { analyser: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null = null;
+  private assistantLevel = 0;
+  private userLevel = 0;
+  private toolName = DEFAULT_REPORT_TOOL;
+  private maxTimer: number | null = null;
+  private muted = false;
   private startTimer: number | null = null;
   private tickTimer: number | null = null;
   private opening: OpeningScript | null = null;
@@ -173,6 +222,7 @@ export class LiveSession {
       }
       this.stream = stream;
       this.micTrack = stream.getAudioTracks()[0] ?? null;
+      this.micMeter = this.createMeter(stream);
 
       const pc = new RTCPeerConnection();
       this.pc = pc;
@@ -215,6 +265,7 @@ export class LiveSession {
       if (!created?.sdp) throw new Error('No session answer returned');
       if (this.stopped) return;
       this.opening = created.opening ?? null;
+      if (created.tool) this.toolName = created.tool;
       await pc.setRemoteDescription({ type: 'answer', sdp: created.sdp });
 
       // The session is live once `session.started` arrives on the data channel.
@@ -227,6 +278,13 @@ export class LiveSession {
         }
       }, START_TIMEOUT_MS);
       this.tickTimer = window.setInterval(this.tick, TICK_MS);
+      this.maxTimer = window.setTimeout(() => {
+        this.maxTimer = null;
+        if (!this.stopped) {
+          this.cb.onError?.('The call reached its 10-minute limit — your draft is saved below.');
+          void this.stop();
+        }
+      }, MAX_CALL_MS);
     } catch (err) {
       const name = (err as { name?: string } | null)?.name;
       const message =
@@ -256,6 +314,18 @@ export class LiveSession {
     this.flushRow('assistant');
     await this.requestClose();
     this.teardown();
+  }
+
+  /** Mute / unmute the caller's microphone (the interviewer is told too). */
+  setMuted(muted: boolean): void {
+    if (this.muted === muted || this.stopped) return;
+    this.muted = muted;
+    if (this.micTrack) this.micTrack.enabled = !muted;
+    this.send({ type: muted ? 'session.input_audio.mute' : 'session.input_audio.unmute', event_id: this.nextEventId('mute') });
+  }
+
+  get isMuted(): boolean {
+    return this.muted;
   }
 
   private nextEventId(prefix: string): string {
@@ -293,29 +363,40 @@ export class LiveSession {
   }
 
   private attachMeter(stream: MediaStream): void {
+    this.meter = this.createMeter(stream);
+  }
+
+  /** An analyser on a stream (never connected to the speakers). */
+  private createMeter(stream: MediaStream): { analyser: AnalyserNode; buf: Float32Array<ArrayBuffer> } | null {
     const ctx = this.audioCtx;
-    if (!ctx) return;
+    if (!ctx) return null;
     try {
       const analyser = ctx.createAnalyser();
-      if (typeof analyser.getFloatTimeDomainData !== 'function') return;
+      if (typeof analyser.getFloatTimeDomainData !== 'function') return null;
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0;
       ctx.createMediaStreamSource(stream).connect(analyser);
-      this.meter = { analyser, buf: new Float32Array(analyser.fftSize) };
+      return { analyser, buf: new Float32Array(analyser.fftSize) };
     } catch {
-      this.meter = null;
+      return null;
     }
+  }
+
+  private static rms(meter: { analyser: AnalyserNode; buf: Float32Array<ArrayBuffer> }): number {
+    meter.analyser.getFloatTimeDomainData(meter.buf);
+    let sum = 0;
+    for (let i = 0; i < meter.buf.length; i++) sum += meter.buf[i] * meter.buf[i];
+    return Math.sqrt(sum / meter.buf.length);
   }
 
   /** 20× a second: sample the meter and settle the speaking readout. */
   private tick = (): void => {
     const now = performance.now();
     const meter = this.meter;
+    let assistantRms = 0;
     if (meter) {
-      meter.analyser.getFloatTimeDomainData(meter.buf);
-      let sum = 0;
-      for (let i = 0; i < meter.buf.length; i++) sum += meter.buf[i] * meter.buf[i];
-      if (Math.sqrt(sum / meter.buf.length) > METER_THRESHOLD) this.heardVoiceAt = now;
+      assistantRms = LiveSession.rms(meter);
+      if (assistantRms > METER_THRESHOLD) this.heardVoiceAt = now;
     }
     const speaking = meter
       ? now - this.heardVoiceAt < METER_HANGOVER_MS
@@ -323,6 +404,16 @@ export class LiveSession {
     if (speaking !== this.speaking) {
       this.speaking = speaking;
       this.cb.onSpeakingChange?.(speaking);
+    }
+    if (this.cb.onLevels) {
+      const userRms = this.micMeter && !this.muted ? LiveSession.rms(this.micMeter) : 0;
+      // Map RMS (speech ≈ 0.02–0.2) onto 0…1 and smooth it for the visualizer.
+      const norm = (v: number) => Math.min(1, Math.sqrt(v / 0.18));
+      this.userLevel = this.userLevel * 0.6 + norm(userRms) * 0.4;
+      this.assistantLevel = meter
+        ? this.assistantLevel * 0.6 + norm(assistantRms) * 0.4
+        : this.assistantLevel * 0.6 + (speaking ? 0.5 : 0) * 0.4;
+      this.cb.onLevels(this.userLevel, this.assistantLevel);
     }
   };
 
@@ -381,7 +472,7 @@ export class LiveSession {
   }
 
   /* ── The report tool ────────────────────────────────────────────────────
-     The Responses backend holds `file_suspicious_report`. Its completed call
+     The Responses backend holds `file_incident_report`. Its completed call
      arrives wrapped in `response.event` as `response.output_item.done`; the
      browser fills the draft and returns the result. Every call must get
      exactly one `response.item.create` (function_call_output) FOLLOWED BY
@@ -401,28 +492,31 @@ export class LiveSession {
   }
 
   private runTool(name: string, rawArgs: string): Record<string, unknown> {
-    if (name !== FILE_REPORT_TOOL) return { filed: false, error: `Unknown tool: ${name || '(unnamed)'}` };
+    if (name !== this.toolName) return { filed: false, error: `Unknown tool: ${name || '(unnamed)'}` };
     let args: Partial<CapturedReport> | null;
     try {
       args = JSON.parse(rawArgs || '{}') as Partial<CapturedReport> | null;
     } catch {
       return { filed: false, error: 'The arguments were not valid JSON; nothing was filed.' };
     }
-    if (!args || typeof args.incident_type !== 'string' || typeof args.description !== 'string' || !args.description.trim()) {
-      return { filed: false, error: 'incident_type and description are required; nothing was filed.' };
+    if (!args || typeof args.category !== 'string' || typeof args.description !== 'string' || !args.description.trim()) {
+      return { filed: false, error: 'category and description are required; nothing was filed.' };
     }
-    const locationHint = typeof args.location_hint === 'string' ? args.location_hint.trim() : '';
     const report: CapturedReport = {
-      incident_type: args.incident_type,
+      ...args,
+      category: args.category,
       description: args.description.trim(),
-      ...(locationHint ? { location_hint: locationHint } : {}),
+      location_hint: typeof args.location_hint === 'string' ? args.location_hint.trim() : undefined,
+      subjects: Array.isArray(args.subjects) ? args.subjects.slice(0, 6) : [],
+      vehicles: Array.isArray(args.vehicles) ? args.vehicles.slice(0, 6) : [],
     };
     this.cb.onReport?.(report);
     return {
       filed: true,
-      incident_type: report.incident_type,
-      location_hint: report.location_hint ?? null,
-      note: "The draft report is on the officer's screen; they will review it, pin the location and submit.",
+      category: report.category,
+      priority: report.priority ?? null,
+      location_hint: report.location_hint || (report.at_reporter_location ? "the caller's business" : null),
+      note: "The draft report is on the caller's screen; they will review it, add photos and press submit to send it to the officers.",
     };
   }
 
@@ -564,6 +658,10 @@ export class LiveSession {
       window.clearInterval(this.tickTimer);
       this.tickTimer = null;
     }
+    if (this.maxTimer !== null) {
+      window.clearTimeout(this.maxTimer);
+      this.maxTimer = null;
+    }
   }
 
   private teardown(): void {
@@ -589,6 +687,8 @@ export class LiveSession {
     this.audioEl = null;
     this.audioCtx = null;
     this.meter = null;
+    this.micMeter = null;
+    this.cb.onLevels?.(0, 0);
     if (this.speaking) {
       this.speaking = false;
       this.cb.onSpeakingChange?.(false);
