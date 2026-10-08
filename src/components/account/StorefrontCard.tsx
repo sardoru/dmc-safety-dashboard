@@ -8,6 +8,7 @@ import { DOWNTOWN_CENTER, geocode } from '../../lib/geo';
 import { generateId, shortAddress } from '../../lib/format';
 import { Button } from '../ui/Button';
 import { Card, CardHeader } from '../ui/Card';
+import { Skeleton } from '../ui/Feedback';
 import { Field, Input, Select } from '../ui/Form';
 import { BUSINESS_TYPES, isBusinessType } from './businessTypes';
 import {
@@ -59,7 +60,7 @@ function savedToast(created: boolean, pin: PinOutcome, address: string, demo: bo
 /** Business accounts: create or edit the storefront officers see on the map. */
 export default function StorefrontCard() {
   const { isDemo, profile: account, email } = useAuth();
-  const { profile, setProfile } = useProfile();
+  const { profile, setProfile, loading } = useProfile();
   const { push } = useToast();
 
   const [draft, setDraft] = useState<StorefrontForm | null>(null);
@@ -136,6 +137,22 @@ export default function StorefrontCard() {
   };
 
   const busy = phase !== null;
+
+  if (loading && !profile) {
+    return (
+      <Card aria-busy="true">
+        <CardHeader icon={<Store className="h-[18px] w-[18px]" />} title="Business storefront" subtitle="Loading your storefront…" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>

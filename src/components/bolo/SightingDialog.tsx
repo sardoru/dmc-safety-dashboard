@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { Car, Eye, Phone, Send, UserSearch } from 'lucide-react';
 import type { Bolo } from '../../types';
 import type { Place } from '../../lib/geo';
@@ -17,7 +17,6 @@ export default function SightingDialog({ bolo, onClose }: { bolo: Bolo; onClose:
   const { reportSighting } = useBolos();
   const { profile } = useProfile();
   const { push } = useToast();
-  const formId = useId();
   const [place, setPlace] = useState<Place | null>(() =>
     profile ? { lat: profile.lat, lng: profile.lng, address: profile.address } : null,
   );
@@ -26,8 +25,9 @@ export default function SightingDialog({ bolo, onClose }: { bolo: Bolo; onClose:
   const [error, setError] = useState('');
   const KindIcon = bolo.kind === 'vehicle' ? Car : UserSearch;
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  // No <form> here: LocationPicker has its own search form, and forms can't nest.
+  const submit = async () => {
+    if (sending) return;
     if (!place) {
       setError('Drop a pin where you saw them — tap the map, search, or use your location.');
       return;
@@ -69,13 +69,13 @@ export default function SightingDialog({ bolo, onClose }: { bolo: Bolo; onClose:
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" form={formId} loading={sending} icon={<Send className="h-4 w-4" aria-hidden />}>
+          <Button onClick={() => void submit()} loading={sending} icon={<Send className="h-4 w-4" aria-hidden />}>
             Send to officers
           </Button>
         </>
       }
     >
-      <form id={formId} onSubmit={submit} className="space-y-5">
+      <div className="space-y-5">
         <Banner
           tone="warning"
           title="Stay safe — do not approach"
@@ -130,7 +130,7 @@ export default function SightingDialog({ bolo, onClose }: { bolo: Bolo; onClose:
             />
           )}
         </Field>
-      </form>
+      </div>
     </Dialog>
   );
 }

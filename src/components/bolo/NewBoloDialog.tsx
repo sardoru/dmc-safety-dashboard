@@ -179,7 +179,16 @@ export default function NewBoloDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <form id={formId} onSubmit={submit} noValidate className="space-y-5">
+      <form
+        id={formId}
+        onSubmit={submit}
+        noValidate
+        className="space-y-5"
+        onKeyDown={(e) => {
+          // A notice goes to every business — only post from the button, never from Enter in a field.
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault();
+        }}
+      >
         <div>
           <p className="label">Looking for a</p>
           <Segmented<Kind>

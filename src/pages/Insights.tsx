@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ChartColumn } from 'lucide-react';
 import { useIncidents } from '../context/IncidentContext';
 import { useNow } from '../hooks/useNow';
 import PageHeader, { PageContainer } from '../components/layout/PageHeader';
@@ -44,6 +45,7 @@ export default function Insights() {
         <Card>
           <EmptyState
             illustration="illoAllClear"
+            icon={<ChartColumn className="h-6 w-6" />}
             title={`No reports in ${meta.phrase}`}
             body={
               data.openNow

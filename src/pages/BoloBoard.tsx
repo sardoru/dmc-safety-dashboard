@@ -62,7 +62,13 @@ export default function BoloBoard() {
           action: {
             label: 'Undo',
             onClick: () => {
-              void setBoloStatus(b.id, 'active').catch(() => undefined);
+              setBoloStatus(b.id, 'active').catch((err: unknown) =>
+                push({
+                  tone: 'danger',
+                  title: 'Couldn’t restore the lookout',
+                  body: err instanceof Error ? err.message : 'Reactivate it from Cleared & expired.',
+                }),
+              );
             },
           },
         });
