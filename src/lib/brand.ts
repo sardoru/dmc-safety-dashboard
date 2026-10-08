@@ -1,19 +1,21 @@
 /**
- * Brand imagery generated with Higgsfield (GPT Image 2.5) for this redesign.
+ * Brand imagery. The skyline is a photograph of Downtown Memphis supplied by
+ * the owner (public/brand/memphis-skyline.jpg; keep its credit mark). The
+ * illustrations were generated with Higgsfield and live on its CDN.
  *
- * The originals live on Higgsfield's CDN. In production they are served
- * through Vercel's Image Optimization API (`/_vercel/image`, configured in
- * vercel.json → `images`), which resizes, converts to AVIF/WebP and caches
- * them at the edge. Every place that shows one has a gradient fallback, so a
- * slow or missing image never breaks the layout.
+ * In production every image is served through Vercel's Image Optimization API
+ * (`/_vercel/image`, configured in vercel.json → `images`), which resizes,
+ * converts to AVIF/WebP and caches at the edge. Every place that shows one has
+ * a gradient fallback, so a slow or missing image never breaks the layout.
  */
 const CDN = 'https://d8j0ntlcm91z4.cloudfront.net/user_3DNAZXDOkIMfSZFDtMpE2N86TGI';
+const SKYLINE = { src: '/brand/memphis-skyline.jpg', width: 2000, height: 918 };
 
 export const BRAND_IMAGES = {
-  /** Blue-hour Memphis skyline across the river (16:9). */
-  skyline: { src: `${CDN}/hf_20261008_170524_c7d9f8c4-7502-442e-8ed1-1c2469018898.png`, width: 2688, height: 1520 },
-  /** Panoramic river-city skyline (21:9). */
-  panorama: { src: `${CDN}/hf_20261008_170524_9d2fcda5-5533-4050-9b41-377ee67d63cd.png`, width: 2688, height: 1152 },
+  /** Downtown Memphis at sunset over the Mississippi (photo). */
+  skyline: SKYLINE,
+  /** The same photo where a wide river-city panorama is shown. */
+  panorama: SKYLINE,
   /** Main Street at night with the trolley (4:5). */
   mainStreet: { src: `${CDN}/hf_20261008_170524_b6fd1703-b51e-4a46-9815-9e740b822e31.png`, width: 1792, height: 2240 },
   /** Shop owner reporting by phone. */

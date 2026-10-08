@@ -321,7 +321,7 @@ async function main() {
   const { createHmac } = await import('node:crypto');
   const hookBody = JSON.stringify({
     user: { email: 'owner@shop.test' },
-    email_data: { token_hash: 'th_123', email_action_type: 'magiclink', site_url: 'https://dmc-safety-dashboard.vercel.app' },
+    email_data: { token_hash: 'th_123', email_action_type: 'magiclink', site_url: 'https://www.901safety.com' },
   });
   const hook = (await import(pathToFileURL(resolve(ROOT, 'api/auth/email-hook.ts')).href)).default as (q: never, s: never) => Promise<void>;
   const runHook = async (headers: Record<string, string>) => {

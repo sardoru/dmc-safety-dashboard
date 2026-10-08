@@ -6,7 +6,7 @@ two-minute guided form, or sending a one-tap alert — and every report lands in
 **Operations Center** that Downtown public-safety officers monitor. Officers triage, respond,
 publish be-on-the-lookout notices, and **hear new reports read aloud**.
 
-**Live:** https://dmc-safety-dashboard.vercel.app
+**Live:** https://www.901safety.com
 
 ---
 
@@ -147,7 +147,7 @@ are **server-only** Vercel variables.
 | Variable | Where | Purpose |
 | --- | --- | --- |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | client | Supabase client (unset = demo mode) |
-| `VITE_SITE_URL` | client | origin used in email links |
+| `VITE_SITE_URL` | client | origin used in email links (production: `https://www.901safety.com`) |
 | `VITE_BROADCASTIFY_FEED_ID`, `VITE_BROADCASTIFY_STREAM_URL` | client | Memphis PD scanner (feed `215` streams inline) |
 | `VITE_CARTO_KEY` | client | CARTO basemap key (free: carto.com/basemaps/apikey). Unset = OpenStreetMap tiles; CARTO without a key shows an "API KEY REQUIRED" watermark. Baked in at build — redeploy after setting it. |
 | `VITE_RADIO_WS_URL`, `VITE_RADIO_HTTP_URL` | client | optional radio-transcription bridge |
@@ -163,7 +163,7 @@ are **server-only** Vercel variables.
 | `ELEVENLABS_MODEL`, `ELEVENLABS_FALLBACK_MODEL`, `ELEVENLABS_VOICE_ID` | server | defaults `eleven_v4`, `eleven_multilingual_v2`, George |
 | `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
-| `RP_ID`, `RP_ORIGIN` | server | passkey relying party (defaults to the request host) |
+| `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 
 ---
 
@@ -199,7 +199,7 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 
 ## "How it works" film
 
-**https://dmc-safety-dashboard.vercel.app/how-it-works** — a 5:53 walkthrough with chapters, a
+**https://www.901safety.com/how-it-works** — a 5:53 walkthrough with chapters, a
 clickable transcript and `?t=` deep links (each chapter's QR code in the film opens one).
 
 - The page is its own Vite entry, [`how-it-works.html`](./how-it-works.html) + `src/film/`, so

@@ -35,6 +35,14 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "host", "value": "dmc-safety-dashboard.vercel.app" }],
+      "destination": "https://www.901safety.com/:path",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/how-it-works", "destination": "/how-it-works.html" },
     { "source": "/((?!api/|assets/|_vercel/).*)", "destination": "/index.html" }

@@ -5,7 +5,7 @@
  *   node scripts/film-data.mjs <film renders dir> [upload date YYYY-MM-DD]
  *
  * Reads <dir>/chapters.json (from the film project's web-assets step), copies
- * the web encode, poster, share image and captions into public/video/, writes
+ * the web encode, poster and captions into public/video/, writes
  * src/film/filmData.ts, and fills the video meta + VideoObject JSON-LD between
  * the markers in how-it-works.html. Refuses words the owner ruled out of the
  * product's language.
@@ -14,7 +14,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const SITE = 'https://dmc-safety-dashboard.vercel.app';
+const SITE = 'https://www.901safety.com';
 const PAGE = `${SITE}/how-it-works`;
 const [dirArg, dateArg] = process.argv.slice(2);
 if (!dirArg) {
@@ -27,8 +27,8 @@ const uploadDate = dateArg ?? new Date().toISOString().slice(0, 10);
 const MEDIA = [
   ['dmc-safety-how-it-works-web.mp4', 'dmc-safety-how-it-works.mp4'],
   ['poster.jpg', 'poster.jpg'],
-  ['og-image.png', 'og-image.png'],
   ['captions.vtt', 'captions.vtt'],
+  // public/video/og-image.png (the share card) is the site's own: scripts/og-images.mjs
 ];
 for (const [from] of MEDIA) {
   if (!existsSync(join(dir, from))) throw new Error(`missing ${join(dir, from)}`);

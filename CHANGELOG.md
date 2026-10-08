@@ -70,6 +70,9 @@ against production in a rolled-back transaction — 15/15 scenarios).
   loads; the landing page no longer scrolls sideways on phones.
 
 ### Changed
+- **Custom domain: https://www.901safety.com** (the bare `901safety.com` redirects to `www`). `dmc-safety-dashboard.vercel.app` 308-redirects there, path and query kept, except `/api/*`. Passkeys: `RP_ID=901safety.com`, `RP_ORIGIN` lists both origins (now a comma-separated list) — passkeys made on the old domain must be added again once. `SITE_URL` / `VITE_SITE_URL`, the Supabase Site URL, redirect allow-list and email-hook address, canonical / Open Graph URLs and the film's QR codes all use the new domain.
+- **New link-preview cards** for the site and the film page: Downtown Memphis at blue hour (artwork generated with Higgsfield, no text in it) with the name, the self-regulated promise, the features, the 911 line and a real QR code to 901safety.com drawn on top (`scripts/og-images.mjs`).
+- The landing and business-home skyline is now a photograph of Downtown Memphis (`public/brand/memphis-skyline.jpg`) instead of a generated picture on a third-party CDN.
 - **No "AI" in the product's words.** It is presented as *a self-regulated safety
   dashboard*: "Report by voice" (an automated voice interview), "Organize my notes",
   "Filled in from your notes", "Summarized from the last N hours"; vendor names left the

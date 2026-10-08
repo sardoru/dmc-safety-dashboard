@@ -3,16 +3,25 @@ import type { VercelRequest } from '@vercel/node';
 export interface RpInfo {
   rpID: string;
   rpName: string;
-  origin: string;
+  /** One origin, or every origin allowed (RP_ORIGIN can be a comma-separated list). */
+  origin: string | string[];
 }
 
-/** Resolve the WebAuthn relying-party id/origin from env or the request host. */
+/**
+ * Resolve the WebAuthn relying-party id/origin from env or the request host.
+ * Production: RP_ID=901safety.com (the registrable domain, so a passkey works
+ * on 901safety.com and www.901safety.com) and RP_ORIGIN listing both origins.
+ */
 export function rpInfo(req: VercelRequest): RpInfo {
   const fwdHost = (req.headers['x-forwarded-host'] || req.headers.host || '') as string;
   const host = fwdHost.split(',')[0].trim();
   const proto = ((req.headers['x-forwarded-proto'] as string) || 'https').split(',')[0].trim();
   const rpID = process.env.RP_ID || host.split(':')[0] || 'localhost';
-  const origin = process.env.RP_ORIGIN || `${proto}://${host}`;
+  const origins = (process.env.RP_ORIGIN ?? '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  const origin = origins.length > 1 ? origins : (origins[0] ?? `${proto}://${host}`);
   return { rpID, rpName: 'Core Downtown Memphis Safety Dashboard', origin };
 }
 
