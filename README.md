@@ -233,10 +233,13 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 > This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
 
 **Migration `0007` goes after the deploy.** Deploy the app first (it works with and without
-`0007`), then run [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
-in the Supabase SQL editor. Open member dashboards switch over within two minutes; Admin →
-System shows **Private report fields** ✓. Run the other way round, the previous app would show
-members no nearby alerts until the deploy.
+`0007`), reload any member dashboard that stays open all day (a front-desk screen or tablet — the
+`/tv` wall display is not affected), then run
+[`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
+in the Supabase SQL editor. Dashboards on the new app switch over within two minutes; Admin →
+System shows **Private report fields** ✓. A screen still on the previous app keeps its list but
+gets no new alerts from other members until it reloads. Run the other way round, the previous app
+would show members no nearby alerts until the deploy.
 
 ---
 
@@ -393,7 +396,9 @@ supabase/tests/          SQL tests on plain Postgres (0007: who can read which r
   / injuries flags, the description, the people and vehicles to look out for (description fields
   only), the storefront that filed it, the officer working it, and photo and "seen" counts. Never
   the reporter's account, contact phone or email, transcript, photos, internal fields or who
-  marked it as seen. Members can't write the copies. Tested on Postgres by
+  marked it as seen. Members can't write the copies. (On a member's own reports, `acknowledged_by`
+  still lists the account ids of members who marked them as seen; members can't look those ids
+  up.) Tested on Postgres by
   [`supabase/tests/0007_community_report_privacy.test.sql`](./supabase/tests/0007_community_report_privacy.test.sql)
   and in `npm run test:api`.
 - A member reads only their **own storefront**; the business directory (contact names, phones,

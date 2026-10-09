@@ -22,8 +22,10 @@
 --     phone, email); officers and admins read the directory.
 --
 -- Order: deploy the app first — it works with and without this migration — then
--- run this file in the Supabase SQL editor. Open dashboards switch over on their
--- own within two minutes.
+-- run this file in the Supabase SQL editor. Dashboards on the new app switch over
+-- on their own within two minutes. A screen still running the previous app (open
+-- since before the deploy, never reloaded) stops getting other members' new
+-- alerts once this runs: reload such screens after the deploy, before this.
 --
 -- Safe to run more than once: a re-run re-syncs the copies and leaves rows that
 -- are already right untouched (no Realtime traffic).
@@ -90,7 +92,7 @@ comment on column public.community_reports.assigned_name is
 comment on column public.community_reports.photo_count is
   'How many photos the report has; the photos stay with officers and the reporter.';
 comment on column public.community_reports.seen_count is
-  'How many members marked it as seen; who did stays in reports.acknowledged_by.';
+  'How many members marked it as seen; who did stays in reports.acknowledged_by (officers and the report''s own reporter).';
 
 alter table public.community_reports enable row level security;
 

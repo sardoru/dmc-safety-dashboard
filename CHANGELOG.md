@@ -22,6 +22,9 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   photos, internal notes, assignment id, summary, lookout link or who marked it as seen.
 - **A member reads only their own storefront.** The business directory — contact names, phones,
   emails — is for officers and admins (the Ops Center map, Admin). Members' screens never used it.
+- Still visible to a reporter on their own reports: `acknowledged_by`, the account ids of members
+  who marked them as seen. Members can no longer look those ids up (profiles and storefronts are
+  their own only).
 
 ### Added
 - `community_reports`, kept in step by triggers on `reports`: new community reports, every
@@ -38,10 +41,11 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 
 ### Changed
 - Member businesses' dashboards load their own reports from `reports` and everyone else's from
-  `community_reports`, both live through Realtime on one channel (a member's own new report is
-  never announced to them as a nearby alert). Nearby alerts, Your block, spoken nearby alerts,
-  the home page and the Lookout board work as before. Officers and admins are unchanged; demo
-  mode is unchanged.
+  `community_reports`, both live through Realtime on one channel, subscribed before the first read
+  (a member's own new report is never announced to them as a nearby alert). A report shared with
+  the community later joins the list quietly, as before — it doesn't ring as a new alert. Nearby
+  alerts, Your block, spoken nearby alerts, the home page and the Lookout board work as before.
+  Officers and admins are unchanged; demo mode is unchanged.
 - Nearby cards and the report sheet take the photo and "seen" counts from the copy; the sheet
   says "Photos are only visible to officers and the reporter", as before.
 - A member without a storefront shows as "Downtown business" on other members' screens (it
@@ -53,15 +57,17 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   runs, members read `reports` as before; open dashboards look for 0007 every two minutes (and
   when the tab comes back) and switch over by themselves. Running 0007 before the deploy would
   leave the old app showing members no nearby alerts until the deploy.
-- Safe to run more than once. Tabs still running the previous version keep their list but stop
-  receiving other members' new alerts until reloaded.
+- Before running it, reload member dashboards that stay open all day (a front-desk screen or
+  tablet): a screen still on the previous version keeps its list but gets no new alerts from other
+  members until it reloads. The `/tv` wall display isn't affected. Safe to run more than once.
 
 ### Verified
 - SQL test 45/45 on PostgreSQL 17 with a Supabase stand-in, and three deliberately broken
   versions of 0007 each caught.
-- API harness 214/214 (19 new: the dashboard reads exactly the columns 0007 creates and none is
-  private; the copy mapping; the member list rules; `/api/display` never selects private
-  columns).
+- API harness 216/216 (21 new: the dashboard reads exactly the columns 0007 creates and none is
+  private; the copy mapping; the member list rules — your own report never announced to you, a
+  report shared later never rings as new, rows left from before the switch-over replaced;
+  `/api/display` never selects private columns).
 - The real app against the scratch database through PostgREST: a member's browser received no
   one else's phone, transcript, photo path, summary, account id or email in any response; nearby
   alerts, the sheet and "Mark as seen" worked; an officer still received everything. With the app
