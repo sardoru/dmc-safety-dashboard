@@ -38,6 +38,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const JoinPage = lazy(() => import('./pages/JoinPage'));
 const LiveMap = lazy(() => import('./pages/LiveMap'));
+const WallDisplay = lazy(() => import('./pages/WallDisplay'));
 const BusinessHome = lazy(() => import('./pages/BusinessHome'));
 const ReportCenter = lazy(() => import('./pages/ReportCenter'));
 const OpsCenter = lazy(() => import('./pages/OpsCenter'));
@@ -66,6 +67,8 @@ createRoot(document.getElementById('root')!).render(
                             <Route path="/auth/callback" element={<AuthCallback />} />
                             <Route path="/join" element={<JoinPage />} />
                             <Route path="/live" element={<LiveMap />} />
+                            {/* The wall display: a private link (/tv#key=…) for a TV on an office wall. */}
+                            <Route path="/tv" element={<WallDisplay />} />
                             <Route
                               element={
                                 <RequireAuth>

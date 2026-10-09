@@ -4,6 +4,7 @@ import { getAdmin } from '../_lib/supabaseAdmin.js';
 import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
 import { methodNotAllowed, readBody, sendError, sendJson } from '../_lib/http.js';
 import { accountExists, audit, ROLE_LABEL, signInLink } from '../_lib/membership.js';
+import { hashDisplayKey, newDisplayKey } from '../_lib/displays.js';
 
 /**
  * Admin-only membership actions that need the service role or send email:
@@ -11,6 +12,9 @@ import { accountExists, audit, ROLE_LABEL, signInLink } from '../_lib/membership
  *   { action: 'passkeys.list',   userId }      → a member's passkeys
  *   { action: 'passkeys.remove', userId, passkeyId }
  *   { action: 'passkeys.setupLink', userId }   → email a one-tap passkey setup link
+ *   { action: 'displays.list' }                → the wall displays' links (live ones)
+ *   { action: 'displays.create', label }       → a new display link; its key is returned once
+ *   { action: 'displays.revoke', id }          → stop a display link at once
  * Codes, settings and dismissals go through RLS-checked database calls instead.
  */
 const RANK: Record<string, number> = { business: 1, officer: 2, admin: 3 };
@@ -131,6 +135,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }),
         );
         await audit(admin, actor, 'passkey.setup_link', email);
+        return sendJson(res, 200, { ok: true });
+      }
+
+      case 'displays.list': {
+        const { data, error } = await admin
+          .from('display_links')
+          .select('id, label, created_at, last_seen_at, revoked_at')
+          .is('revoked_at', null)
+          .order('created_at', { ascending: false });
+        if (error) throw new Error(error.message);
+        return sendJson(res, 200, { displays: data ?? [] });
+      }
+
+      case 'displays.create': {
+        const label = String(body.label ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
+        if (!label) return sendError(res, 400, 'Name the display — for example "Office wall"');
+        const key = newDisplayKey();
+        const { data, error } = await admin
+          .from('display_links')
+          .insert({ label, token_hash: hashDisplayKey(key), created_by: actor.id })
+          .select('id, label, created_at, last_seen_at, revoked_at')
+          .single();
+        if (error) throw new Error(error.message);
+        await audit(admin, actor, 'display.created', label);
+        // The key leaves the server once, here, inside the link; only its hash is kept.
+        return sendJson(res, 200, { display: data, key });
+      }
+
+      case 'displays.revoke': {
+        const id = String(body.id ?? '');
+        if (!UUID.test(id)) return sendError(res, 400, 'Missing display');
+        const { data, error } = await admin
+          .from('display_links')
+          .update({ revoked_at: new Date().toISOString() })
+          .eq('id', id)
+          .is('revoked_at', null)
+          .select('label');
+        if (error) throw new Error(error.message);
+        if (!data?.length) return sendError(res, 404, 'That display link is already revoked');
+        await audit(admin, actor, 'display.revoked', data[0].label as string);
         return sendJson(res, 200, { ok: true });
       }
 

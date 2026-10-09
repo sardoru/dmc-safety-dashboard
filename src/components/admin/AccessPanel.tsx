@@ -28,6 +28,7 @@ import { Banner, EmptyState } from '../ui/Feedback';
 import { Field, Input, Select, Switch } from '../ui/Form';
 import { Dialog } from '../ui/Overlay';
 import AccessCodeQr from './AccessCodeQr';
+import DisplayLinksCard from './DisplayLinksCard';
 import ListSkeleton from './ListSkeleton';
 import { codeStatus, joinLink, STATUS_LABEL, type AccessCode, type CodeRole } from './membership';
 import { useMembership } from './useMembership';
@@ -570,7 +571,7 @@ function PublicMapCard({ s }: { s: Settings }) {
   );
 }
 
-/** Admin → Access: codes, requests, who can join, public map. */
+/** Admin → Access: codes, requests, who can join, public map, wall displays. */
 export default function AccessPanel() {
   // One shared state for every card: a code created in the form shows up in the list.
   const m = useMembership();
@@ -584,6 +585,7 @@ export default function AccessPanel() {
       <div className="min-w-0 space-y-6">
         <WhoCanJoinCard s={s} />
         <PublicMapCard s={s} />
+        <DisplayLinksCard />
       </div>
     </div>
   );

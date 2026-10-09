@@ -5,6 +5,7 @@
  *
  *   npm run test:api
  */
+import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -518,6 +519,119 @@ async function main() {
   r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'waitlist.approve', id: 'not-a-uuid' });
   check('bad id → 400', r.statusCode === 400, r.data);
   delete process.env.RESEND_API_KEY;
+
+  // ---------------------------------------------------------------- Wall display (/tv)
+  console.log('api/display + display links');
+  const KEY = 'TvKey_0123456789-abcdefghijklmnopqrstuvwxyzA'.slice(0, 43);
+  const KEY_HASH = createHash('sha256').update(KEY).digest('hex');
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  let displayRow: Record<string, unknown> | null = { id: '66666666-6666-6666-6666-666666666666', label: 'Office wall', created_at: ago(60), last_seen_at: null, revoked_at: null };
+  // Full report rows, private fields included: none of them may reach a display.
+  const REPORT_ROWS = [
+    {
+      id: 'abcd1234-0000-0000-0000-000000000001', incident_type: 'Suspicious Person', priority: 2, status: 'active', title: 'Man trying car door handles on S 2nd St',
+      description: 'PRIVATE-DESCRIPTION', address: '99 S 2nd St, Memphis, TN 38103', location_note: null, lat: 35.1412, lng: -90.0521,
+      created_at: ago(4), updated_at: ago(4), happening_now: true, weapons_seen: false, injuries: false, visibility: 'community',
+      contact_phone: 'PRIVATE-PHONE', business_name: 'PRIVATE-BUSINESS', reporter_id: 'PRIVATE-REPORTER', photos: ['PRIVATE-PHOTO'], transcript: 'PRIVATE-TRANSCRIPT', subjects: [{ top: 'PRIVATE-SUBJECT' }],
+    },
+    {
+      id: 'beef5678-0000-0000-0000-000000000002', incident_type: 'Theft / Shoplifting', priority: 3, status: 'resolved', title: null,
+      description: 'Two prints taken from the front display. More detail here.', address: null, location_note: 'South Main Gallery', lat: 35.139, lng: -90.054,
+      created_at: ago(90), updated_at: ago(30), happening_now: false, weapons_seen: false, injuries: false, visibility: 'officers',
+    },
+  ];
+  const OLD_OPEN = [
+    {
+      id: 'cafe9012-0000-0000-0000-000000000003', incident_type: 'Break-in / Burglary', priority: 2, status: 'acknowledged', title: 'Car window smashed on level 3',
+      description: 'x', address: '150 Peabody Pl, Memphis, TN 38103', location_note: null, lat: 35.138, lng: -90.05,
+      created_at: ago(60 * 30), updated_at: ago(60), happening_now: false, weapons_seen: false, injuries: false, visibility: 'community',
+    },
+  ];
+  upstream = (url, init) => {
+    const method = init.method ?? 'GET';
+    const accept = (init.headers?.['accept'] ?? '') as string;
+    if (url.startsWith('https://fake.supabase.co/rest/v1/display_links')) {
+      if (method === 'GET' && url.includes('token_hash=')) {
+        const hit = displayRow && url.includes(`token_hash=eq.${KEY_HASH}`) && url.includes('revoked_at=is.null');
+        return accept.includes('vnd.pgrst.object') ? (hit ? json(200, displayRow) : pgNone()) : json(200, hit ? [displayRow] : []);
+      }
+      if (method === 'GET') return json(200, displayRow ? [displayRow] : []);
+      if (method === 'POST') {
+        const b = (typeof init.body === 'string' ? JSON.parse(init.body) : init.body) as { label: string };
+        const row = { id: '77777777-7777-7777-7777-777777777777', label: b.label, created_at: ago(0), last_seen_at: null, revoked_at: null };
+        return accept.includes('vnd.pgrst.object') ? json(201, row) : json(201, [row]);
+      }
+      if (method === 'PATCH') return json(200, url.includes('revoked_at=is.null') && url.includes('id=eq.') ? [{ label: 'Office wall' }] : []);
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/reports')) {
+      return json(200, url.includes('created_at=gte.') ? REPORT_ROWS : OLD_OPEN);
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/bolos')) return json(200, [], { 'content-range': '*/2' });
+    if (url.startsWith('https://fake.supabase.co/rest/v1/audit_log')) return json(201, {});
+    if (url.startsWith('https://fake.supabase.co/rest/v1/profiles')) return json(200, []);
+    return null;
+  };
+  const runDisplay = async (headers: Record<string, string>) => {
+    const h = (await import(pathToFileURL(resolve(ROOT, 'api/display.ts')).href)).default as (q: never, s: never) => Promise<void>;
+    const res = new MockRes();
+    await h({ method: 'GET', headers: { 'x-forwarded-for': '203.0.113.9', ...headers }, query: {} } as never, res as never);
+    return res;
+  };
+
+  r = await runDisplay({});
+  check('no key → 401', r.statusCode === 401, r.data);
+  calls.length = 0;
+  r = await runDisplay({ 'x-display-key': 'short' });
+  check('malformed key → 401, database not asked', r.statusCode === 401 && !calls.some((c) => c.url.includes('/rest/v1/')), r.data);
+  r = await runDisplay({ 'x-display-key': 'Z'.repeat(43) });
+  check('unknown key → 401', r.statusCode === 401 && /revoked or never existed/.test(r.data.error), r.data);
+
+  calls.length = 0;
+  r = await runDisplay({ 'x-display-key': KEY });
+  const feedText = r.text;
+  const lookup = calls.find((c) => c.url.startsWith('https://fake.supabase.co/rest/v1/display_links') && c.method === 'GET');
+  check('valid key → 200, the display’s label', r.statusCode === 200 && r.data.display?.label === 'Office wall', r.data);
+  check('the key is looked up by its SHA-256 hash, never sent as is', !!lookup?.url.includes(KEY_HASH) && !calls.some((c) => c.url.includes(KEY)), lookup?.url);
+  check('no-store caching', r.headers['cache-control'] === 'no-store', r.headers);
+  check(
+    'reports: newest first, open ones of any age, refs and short places',
+    r.data.reports?.length === 3 && r.data.reports[0].ref === 'DT-ABCD' && r.data.reports[0].place === '99 S 2nd St' && r.data.reports[2].status === 'acknowledged',
+    r.data.reports?.map((x: { ref: string; place: string; status: string }) => [x.ref, x.place, x.status]),
+  );
+  check('untitled report → headline from its first sentence; place from the note', r.data.reports?.[1]?.title === 'Two prints taken from the front display' && r.data.reports?.[1]?.place === 'South Main Gallery', r.data.reports?.[1]);
+  check('officers-only reports are marked', r.data.reports?.[1]?.officersOnly === true && r.data.reports?.[0]?.officersOnly === false);
+  check('counts: new, open, P1–P2 open, last 24 h, lookouts', JSON.stringify(r.data.counts) === JSON.stringify({ new: 1, open: 2, urgent: 2, last24h: 2, lookouts: 2 }), r.data.counts);
+  check('never a description, phone, business, reporter, photo, transcript or subject', !/PRIVATE-/.test(feedText), feedText.match(/PRIVATE-[A-Z]+/g));
+  check('last seen recorded (stale display)', calls.some((c) => c.method === 'PATCH' && c.url.startsWith('https://fake.supabase.co/rest/v1/display_links') && !!(c.body as { last_seen_at?: string })?.last_seen_at));
+  displayRow = { ...displayRow, last_seen_at: ago(0.5) };
+  calls.length = 0;
+  await runDisplay({ 'x-display-key': KEY });
+  check('…but not again within two minutes', !calls.some((c) => c.method === 'PATCH'));
+
+  r = await run('api/admin/members.ts', 'POST', 'tok-off', { action: 'displays.create', label: 'Office wall' });
+  check('officer can’t make a display link → 403', r.statusCode === 403, r.data);
+  calls.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'displays.create', label: '  Office   wall ' });
+  const ins = calls.find((c) => c.method === 'POST' && c.url.startsWith('https://fake.supabase.co/rest/v1/display_links'));
+  const newKey = String(r.data.key ?? '');
+  check('admin makes a link: key returned once, only its hash stored', r.statusCode === 200 && /^[A-Za-z0-9_-]{43}$/.test(newKey) && (ins?.body as { token_hash?: string })?.token_hash === createHash('sha256').update(newKey).digest('hex') && !JSON.stringify(ins?.body).includes(newKey), { r: r.data, b: ins?.body });
+  check('label tidied, creation audited', (ins?.body as { label?: string })?.label === 'Office wall' && calls.some((c) => c.url.includes('/rest/v1/audit_log') && (c.body as { action?: string })?.action === 'display.created'), ins?.body);
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'displays.create', label: '   ' });
+  check('blank name → 400', r.statusCode === 400, r.data);
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'displays.list' });
+  check('admin lists live display links', r.statusCode === 200 && r.data.displays?.length === 1, r.data);
+  calls.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'displays.revoke', id: '66666666-6666-6666-6666-666666666666' });
+  check('revoke → 200, audited', r.statusCode === 200 && calls.some((c) => c.url.includes('/rest/v1/audit_log') && (c.body as { action?: string })?.action === 'display.revoked'), r.data);
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'displays.revoke', id: 'nope' });
+  check('revoke with a bad id → 400', r.statusCode === 400, r.data);
+
+  displayRow = null;
+  r = await runDisplay({ 'x-display-key': KEY });
+  check('revoked link → 401 at the next poll', r.statusCode === 401, r.data);
+  let lastStatus = 0;
+  for (let i = 0; i < 41; i++) lastStatus = (await runDisplay({ 'x-display-key': KEY, 'x-forwarded-for': '198.51.100.7' })).statusCode;
+  check('41st request in a minute from one address → 429', lastStatus === 429, lastStatus);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
