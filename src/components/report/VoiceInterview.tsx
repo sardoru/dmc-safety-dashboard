@@ -273,7 +273,7 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
           </p>
           <p className="mt-1 text-[12px] text-navy-200">
             {connected
-              ? `${mmss(elapsed)}${config?.provider === 'elevenlabs' ? ` · ${elevenVoice ? `Eleven v4 · ${elevenVoice}` : 'Eleven v4'}` : ''}`
+              ? `${mmss(elapsed)}${config?.provider === 'elevenlabs' && elevenVoice ? ` · voice “${elevenVoice}”` : ''}`
               : config
                 ? 'Speak naturally — like calling a dispatcher'
                 : 'Checking the voice line…'}
