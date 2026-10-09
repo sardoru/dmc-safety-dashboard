@@ -6,9 +6,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
-      // The film page is its own entry so link previews get real video meta;
+      // Each film page is its own entry so link previews get real video meta;
       // /join and /live are the same app with their own link-preview cards.
-      input: { main: 'index.html', film: 'how-it-works.html', join: 'join.html', live: 'live.html' },
+      input: {
+        main: 'index.html',
+        film: 'how-it-works.html',
+        reportFilm: 'how-to-report.html',
+        join: 'join.html',
+        live: 'live.html',
+      },
       output: {
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],

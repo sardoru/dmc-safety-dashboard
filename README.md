@@ -97,7 +97,7 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
 
 - **Frontend:** React Router app with role-based workspaces (`/home`, `/ops`, `/report`,
   `/bolo`, `/insights`, `/admin`, `/account`) and public pages (`/welcome`, `/login`, `/join`,
-  `/live`, `/how-it-works`), Leaflet maps (CARTO tiles), a small design
+  `/live`, `/how-it-works`, `/how-to-report`), Leaflet maps (CARTO tiles), a small design
   system in [`src/components/ui`](./src/components/ui), and contexts for auth, incidents,
   BOLOs, voice, theme and toasts.
 - **Backend:** stateless functions under [`/api`](./api). They hold every secret — the browser
@@ -219,18 +219,34 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 
 ---
 
-## "How it works" film
+## Films
 
-**https://www.901safety.com/how-it-works** — a 5:53 walkthrough with chapters, a
-clickable transcript and `?t=` deep links (each chapter's QR code in the film opens one).
+Two films, each with chapters, a clickable transcript and `?t=` deep links (each chapter's
+QR code in the film opens one):
 
-- The page is its own Vite entry, [`how-it-works.html`](./how-it-works.html) + `src/film/`, so
-  link previews get real video tags without running the app.
-- The film is made in its own project (`~/videos/dmc-safety-how-it-works`, HyperFrames). To bring
-  a new cut in: `node scripts/film-data.mjs ~/videos/dmc-safety-how-it-works/renders` — it copies
-  the web MP4, poster, share image and captions into `public/video/`, regenerates
-  `src/film/filmData.ts` / `filmMeta.ts` and the page's VideoObject, and refuses wording the
-  product doesn't use ("AI", vendor names).
+- **https://www.901safety.com/how-it-works** — the 5:53 tour of the dashboard and the Ops Center
+  (dark).
+- **https://www.901safety.com/how-to-report** — the 3:08 how-to (light): report an incident by
+  voice, with the guided form or with a quick alert, review and send, follow its status, and how
+  officers respond. Its voice chapter is a real call on the voice line; the transcript labels the
+  call's own lines ("Interviewer:", "Caller:"). Linked from the landing page, the report page and
+  the first film.
+
+How they're wired:
+
+- Each page is its own Vite entry — [`how-it-works.html`](./how-it-works.html) and
+  [`how-to-report.html`](./how-to-report.html) → `src/film/main.tsx` / `reportMain.tsx`, sharing
+  `FilmPage.tsx` — so link previews get real video tags without running the app, and each page
+  bundles only its own transcript.
+- Each film is made in its own HyperFrames project (`~/videos/dmc-safety-how-it-works`,
+  `~/videos/dmc-safety-how-to-report`). To bring a new cut in:
+  `node scripts/film-data.mjs <project>/renders [YYYY-MM-DD] [--film how-it-works|how-to-report]`
+  — it copies the web MP4, poster and captions into `public/video/` (or
+  `public/video/how-to-report/`), regenerates the film's data module (`src/film/filmData.ts` or
+  `reportFilmData.ts`) and its length in `filmMeta.ts`, fills the page's VideoObject, and
+  refuses wording the product doesn't use ("AI", vendor names).
+- The share cards come from `node scripts/og-images.mjs` (`--only how-to-report` for just that
+  one).
 
 ---
 

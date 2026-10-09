@@ -25,7 +25,7 @@ import { useNow } from '../hooks/useNow';
 import type { Role } from '../types';
 import { isOpen } from '../lib/taxonomy';
 import { cn } from '../lib/format';
-import { FILM_DURATION } from '../film/filmMeta';
+import { FILM_DURATION, REPORT_FILM_DURATION } from '../film/filmMeta';
 import { formatTime } from '../film/time';
 import Logo, { LogoMark } from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
@@ -180,6 +180,11 @@ export default function Landing() {
               {FILM_DURATION > 0 && (
                 <a href="/how-it-works" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
                   <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
+                </a>
+              )}
+              {REPORT_FILM_DURATION > 0 && (
+                <a href="/how-to-report" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                  <CirclePlay className="h-5 w-5" /> How to report · {formatTime(REPORT_FILM_DURATION)}
                 </a>
               )}
               <Link to="/live" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
@@ -372,6 +377,13 @@ export default function Landing() {
                   <li>
                     <a href="/how-it-works" className="hover:text-ink">
                       Watch the film · {formatTime(FILM_DURATION)}
+                    </a>
+                  </li>
+                )}
+                {REPORT_FILM_DURATION > 0 && (
+                  <li>
+                    <a href="/how-to-report" className="hover:text-ink">
+                      How to report · {formatTime(REPORT_FILM_DURATION)}
                     </a>
                   </li>
                 )}
