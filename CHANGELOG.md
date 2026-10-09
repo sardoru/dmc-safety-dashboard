@@ -20,9 +20,9 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   the invited role). New addresses get **Accept your invitation** / **Finish joining**; existing
   accounts get **Sign in to the dashboard** with a "You're now …" or "Your access is ready"
   version.
-- The film list in one place, `api/_lib/films.ts` (titles, lengths, chapter starts, posters);
-  "How to join and take part" is linked as "about 3 min" until its cut lands
-  (`HOW_TO_JOIN_LENGTH`).
+- The film list in one place, `api/_lib/films.ts` (titles, lengths, chapter starts, posters),
+  all three checked against the film pages — "How to join and take part" (3:08) included, with
+  chapter links for each role.
 - Admin → Team → **Invite someone**: invite a **member business**, a Public Safety officer or an
   administrator, with a hint for each role. The picker starts on the least access.
 - Email craft: tables and inline styles for Gmail, Outlook and Apple Mail; a full-width button

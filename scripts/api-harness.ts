@@ -12,6 +12,7 @@ import { invitationEmail, type InvitationOptions } from '../api/_lib/invitations
 import { chapterUrl, clock, FILMS, type Film } from '../api/_lib/films.ts';
 import { FILM as HOW_IT_WORKS_FILM } from '../src/film/filmData.ts';
 import { FILM as HOW_TO_REPORT_FILM } from '../src/film/reportFilmData.ts';
+import { FILM as HOW_TO_JOIN_FILM } from '../src/film/joinFilmData.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -741,6 +742,7 @@ async function main() {
   const filmMismatch = ([
     [FILMS.howItWorks, HOW_IT_WORKS_FILM],
     [FILMS.howToReport, HOW_TO_REPORT_FILM],
+    [FILMS.howToJoin, HOW_TO_JOIN_FILM],
   ] as [Film, typeof HOW_IT_WORKS_FILM][]).flatMap(([ours, page]) => {
     const mine = Object.values(ours.chapters).map((c) => `${c.title}@${c.start}`);
     const theirs = page.chapters.map((c) => `${c.title}@${Math.floor(c.start)}`);

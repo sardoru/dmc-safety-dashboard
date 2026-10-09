@@ -103,6 +103,7 @@ interface Content {
 const F = FILMS;
 const ch = F.howItWorks.chapters;
 const rc = F.howToReport.chapters;
+const jn = F.howToJoin.chapters;
 
 const BUSINESS_FEATURES: (live: string) => Item[] = (live) => [
   {
@@ -250,7 +251,7 @@ function filmsFor(role: Role): FilmPick[] {
 function pickFilms(role: Role): FilmPick[] {
   if (role === 'business') {
     return [
-      { film: F.howToJoin, note: [b('Start here.')], chapters: [] },
+      { film: F.howToJoin, note: [b('Start here.')], chapters: [jn.storefront, jn.everyDay, jn.lookout] },
       { film: F.howToReport, chapters: [rc.reportByVoice, rc.guidedForm, rc.quickAlert, rc.followStatus] },
       { film: F.howItWorks, chapters: [ch.signIn, ch.businessHome, ch.reportByVoice, ch.lookout] },
     ];
@@ -259,12 +260,12 @@ function pickFilms(role: Role): FilmPick[] {
     return [
       { film: F.howItWorks, chapters: [ch.opsCenter, ch.districtMap, ch.triage, ch.spokenAlerts, ch.lookout, ch.insights] },
       { film: F.howToReport, chapters: [rc.officersRespond, rc.reportByVoice] },
-      { film: F.howToJoin, note: ['What businesses see when they join — handy when you help one get started.'], chapters: [] },
+      { film: F.howToJoin, note: ['What businesses see when they join — handy when you help one get started.'], chapters: [jn.register, jn.accessCode] },
     ];
   }
   return [
     { film: F.howItWorks, chapters: [ch.team, ch.opsCenter, ch.triage, ch.spokenAlerts, ch.insights] },
-    { film: F.howToJoin, note: ['Where your invitations and access codes lead: how businesses join and take part.'], chapters: [] },
+    { film: F.howToJoin, note: ['Where your invitations and access codes lead: how businesses join and take part.'], chapters: [jn.accessCode, jn.storefront] },
     { film: F.howToReport, chapters: [rc.officersRespond] },
   ];
 }

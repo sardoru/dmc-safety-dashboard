@@ -9,12 +9,6 @@
 /** The public site the films live on. */
 export const FILM_SITE = 'https://www.901safety.com';
 
-/**
- * "How to join and take part" is still being produced; it goes live with its
- * own release. Update its running time here once it's cut.
- */
-export const HOW_TO_JOIN_LENGTH = 'about 3 min';
-
 export interface FilmChapter {
   title: string;
   /** Whole seconds from the start of the film. */
@@ -89,10 +83,23 @@ export const FILMS = {
   howToJoin: {
     title: 'How to join and take part',
     url: `${FILM_SITE}/how-to-join`,
-    length: HOW_TO_JOIN_LENGTH,
+    length: '3:08',
     summary:
       'Join with your email or an access code, set up your storefront, and take part: nearby alerts, the Lookout board and the public live map.',
-    chapters: {},
+    poster: {
+      src: thumb('/video/how-to-join/poster.jpg'),
+      alt: 'Watch “How to join and take part”',
+    },
+    chapters: {
+      whoCanJoin: { title: 'Who can join', start: 0 },
+      register: { title: 'Register your business', start: 28 },
+      accessCode: { title: 'Join with an access code', start: 55 },
+      storefront: { title: 'Set up your storefront', start: 74 },
+      everyDay: { title: 'Take part every day', start: 101 },
+      lookout: { title: 'The Lookout board', start: 128 },
+      everyone: { title: 'For everyone downtown', start: 151 },
+      scanToJoin: { title: 'Scan to join', start: 174 },
+    },
   },
 } satisfies Record<string, Film>;
 

@@ -299,8 +299,8 @@ looks up the invited role).
   didn't; an account that has never signed in gets the invitation again. An invitation never
   lowers a role — an account's or an open invitation's.
 - **Films:** one list in [`api/_lib/films.ts`](./api/_lib/films.ts) — titles, lengths, chapter
-  starts, posters. The harness checks it against the film pages; set `HOW_TO_JOIN_LENGTH` when
-  "How to join and take part" is cut.
+  starts, posters. The harness checks all three against the film pages' generated data, so a
+  re-cut that moves a chapter fails the tests until this list follows.
 - **Craft:** tables + inline styles for Gmail, Outlook and Apple Mail, phone and dark-mode
   refinements, readable with images off, a plain-text part, ~35 KB.
 - **Wording:** `npm run test:api` renders every role × way in × account and fails on AI or vendor
