@@ -19,6 +19,7 @@ import {
   ENV_VOICE,
   isChecking,
   MIGRATION_0002,
+  MIGRATION_0007,
   schemaComplete,
   SUPABASE_HOST,
   type SystemHealth,
@@ -129,13 +130,15 @@ export default function SystemPanel({ health, live }: SystemPanelProps) {
                     label: 'Schema',
                     value: !caps.checked
                       ? 'Checking…'
-                      : schemaComplete(caps)
-                        ? 'Migration 0002 applied'
-                        : 'Migration 0002 is missing or incomplete',
+                      : !schemaComplete(caps)
+                        ? 'Migration 0002 is missing or incomplete'
+                        : caps.community
+                          ? 'Migrations 0002 and 0007 applied'
+                          : 'Migration 0007 is missing',
                   },
                 ]}
               />
-              <ul className="grid gap-2.5 sm:grid-cols-3">
+              <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
                 <CheckItem
                   ok={caps.checked ? caps.v2 : null}
                   label="Incident fields"
@@ -143,12 +146,25 @@ export default function SystemPanel({ health, live }: SystemPanelProps) {
                 />
                 <CheckItem ok={caps.checked ? caps.updates : null} label="Incident timeline" detail="report_updates table" />
                 <CheckItem ok={caps.checked ? caps.bolos : null} label="Lookout board" detail="bolos table" />
+                <CheckItem
+                  ok={caps.checked ? caps.community : null}
+                  label="Private report fields"
+                  detail="community_reports table"
+                />
               </ul>
               {caps.checked && !schemaComplete(caps) && (
                 <Banner tone="warning" title="Run migration 0002">
                   Paste <Mono>{MIGRATION_0002}</Mono> into the Supabase SQL editor (or run <Mono>supabase db push</Mono>)
                   and reload. It’s safe to run more than once; until then priorities, the timeline and the lookout board
                   stay off.
+                </Banner>
+              )}
+              {caps.checked && schemaComplete(caps) && !caps.community && (
+                <Banner tone="warning" title="Run migration 0007">
+                  Paste <Mono>{MIGRATION_0007}</Mono> into the Supabase SQL editor and reload. Until it runs, every member
+                  business still receives other members’ contact phone numbers, transcripts and photo links with the
+                  community alerts (the app doesn’t show them, but they reach the browser). It’s safe to run more than
+                  once.
                 </Banner>
               )}
             </>
