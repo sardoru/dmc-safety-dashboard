@@ -423,10 +423,12 @@ create trigger trg_waitlist_audit
 
 -- ── audit: role changes and invite revocations made in the app ───────────────
 
+-- Server-side changes (service role: invites, codes, approvals) write their
+-- own entry naming the admin, so only in-app changes are recorded here.
 create or replace function public.profiles_role_audit()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.role is distinct from old.role then
+  if new.role is distinct from old.role and auth.uid() is not null then
     perform public.audit('member.role_changed', new.email, jsonb_build_object('from', old.role, 'to', new.role));
   end if;
   return new;

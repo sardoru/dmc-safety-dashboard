@@ -3,6 +3,7 @@ import { requireRole } from '../_lib/auth.js';
 import { getAdmin } from '../_lib/supabaseAdmin.js';
 import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
 import { sendError, sendJson, methodNotAllowed, readBody } from '../_lib/http.js';
+import { audit } from '../_lib/membership.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
@@ -29,6 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (existing) {
       // Grant the role immediately and record the (already-claimed) invite.
       await admin.from('profiles').update({ role }).eq('id', existing.id);
+      await audit(admin, guard.user, 'member.role_granted', email, { from: existing.role, to: role });
       await admin.from('officer_invites').delete().eq('email', email).eq('status', 'pending');
       await admin.from('officer_invites').insert({
         email,
@@ -92,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         footnote: `This invitation is for ${email}.`,
       }),
     );
+    await audit(admin, guard.user, 'invite.sent', email, { role });
     return sendJson(res, 200, { status: 'invited', emailed: true });
   } catch (err) {
     return sendError(res, 500, err instanceof Error ? err.message : 'Could not send invitation');
