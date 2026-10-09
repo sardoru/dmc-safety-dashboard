@@ -37,6 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const who = await inviterName(admin, guard.user);
     const result = await inviteByEmail(admin, email, role, { actor: guard.user, name: who });
     if (result.kind === 'no-link') return sendError(res, 502, result.error);
+    // 'stopped' needs a beforeSend hook, which only the paced list passes.
+    if (result.kind === 'stopped') return sendError(res, 500, 'Could not send invitation');
     return sendJson(res, 200, { status: result.status, role: result.role, emailed: result.emailed });
   } catch (err) {
     return sendError(res, 500, err instanceof Error ? err.message : 'Could not send invitation');

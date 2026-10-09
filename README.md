@@ -121,7 +121,9 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   paced invitation queue, its settings row and `claim_queued_invites()`, server-only), then
   [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
   (`community_reports`: other members' community reports without their private fields; `reports`
-  for the reporter and officers only; members read only their own storefront).
+  for the reporter and officers only; members read only their own storefront), then
+  [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql) (Invite a
+  list's brakes: `emailing_at`, the self-pause reason, one run per quarter hour, the last run).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -147,9 +149,11 @@ for it every two minutes and switch to `community_reports` by themselves.
    [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql), then
    [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql), then
    [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql), then
-   [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
-   into the SQL editor. `0002`–`0007` are idempotent and keep existing data. On a live project,
-   deploy the app before running `0007` (see [Deploy](#deploy-vercel)).
+   [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql), then
+   [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql)
+   into the SQL editor. `0002`–`0008` are idempotent and keep existing data. On a live project,
+   deploy the app before running `0007` (see [Deploy](#deploy-vercel)), and run `0008` **before**
+   deploying the app that needs it ([Inviting a list](#inviting-a-list-paced)).
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 5. **Auth → Hooks → Before User Created** → Postgres function
@@ -201,7 +205,7 @@ are **server-only** Vercel variables.
 | `EMAIL_REPLY_TO` | server | optional: where replies to any email go (the sending domain has no inbox, so without it a reply bounces). Leave it empty when the reply relay is on. |
 | `RESEND_WEBHOOK_SECRET`, `INBOUND_FORWARD_TO` | server | the reply relay: the Resend webhook's signing secret, and the hidden inbox replies are forwarded to (comma-separated) |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
-| `CRON_SECRET` | server | Vercel Cron's bearer secret for `/api/cron/invites` (Invite a list). **Production only.** Unset = the endpoint answers 503 and no queued invitation goes out. |
+| `CRON_SECRET` | server | Vercel Cron's bearer secret for `/api/cron/invites` (Invite a list), at least 16 characters. **Production only.** Unset or shorter = the endpoint answers 503 and no queued invitation goes out. |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 
 ---
@@ -217,6 +221,8 @@ npm run test:api     # runs the /api functions against mocked OpenAI, ElevenLabs
 npx tsc -p api/tsconfig.json --noEmit
 # who can read which report fields — plain local Postgres, a fresh scratch database (never Supabase):
 dropdb --if-exists dmc_0007_test; createdb dmc_0007_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0007_test -f supabase/tests/0007_community_report_privacy.test.sql
+# Invite a list's brakes (claim, cancel, recovery, one run per quarter hour) — same rules:
+dropdb --if-exists dmc_0008_test; createdb dmc_0008_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0008_test -f supabase/tests/0008_invite_queue_brakes.test.sql
 ```
 
 The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functions together.
@@ -361,48 +367,73 @@ looks up the invited role).
 
 ## Inviting a list (paced)
 
-Admin → Team → **Invite a list** invites a whole list — say, the ~90 businesses on a safety
-meeting's sign-in sheet — a few at a time: **5 every 15 minutes**. The emails trickle out (better
-for deliverability than 90 at once), and the team can watch, pause, or cancel the rest.
+Admin → Team → **Invite a list** invites a whole list of **member businesses** — say, the ~90 on a
+safety meeting's sign-in sheet — a few at a time: **5 every 15 minutes**. The emails trickle out
+(better for deliverability than 90 at once), and the team can watch, pause, or cancel the rest.
 
 > **Before first use:** (1) apply [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql)
-> to the production database, (2) set **`CRON_SECRET`** in Vercel → Production (for example
-> `openssl rand -hex 32`), (3) deploy (`vercel --prod`). Vercel registers the cron from `vercel.json`
-> on that deploy (Project → Settings → Cron Jobs). Without the migration the card says so and nothing
-> is queued; without `CRON_SECRET` the cron answers 503 and nothing goes out.
+> and [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql) to the
+> production database, (2) set **`CRON_SECRET`** in Vercel → Production — at least 16 characters, for
+> example `openssl rand -hex 32`, (3) deploy (`vercel --prod`). Vercel registers the cron from
+> `vercel.json` on that deploy (Project → Settings → Cron Jobs). **Apply 0008 before deploying 0.4.9**:
+> it only adds columns, so the previous app keeps working; the new app needs them — without them the
+> card and the cron answer 503 and nothing goes out. Without `CRON_SECRET`, or with one under 16
+> characters, the cron answers 503 and nothing goes out.
 
 - **Paste:** one address per line. `dana@business.com`, `Dana Whitfield <dana@business.com>`,
   `"Whitfield, Dana" <dana@business.com>`, spreadsheet columns and stray commas or semicolons all
   work. Addresses are trimmed, lower-cased and de-duplicated; lines that aren't an address are
-  listed with their line number. Up to 500 addresses at a time. Pick the role (**Member business**
-  by default, with the same hints as Invite someone) and an optional label ("Safety Meeting · Mar
-  11"). Addresses already waiting in the queue are skipped.
-- **Confirm:** "92 invitations will go out 5 every 15 minutes, starting about 2:45 PM. You can pause
-  any time." — with when the last should go out and how many are already waiting ahead of them.
-- **Sending:** the cron (`/api/cron/invites`) claims the oldest few and invites each exactly as
-  Invite someone does (`api/_lib/invite.ts`, shared by both): the email written for the role, from
-  the administrator who queued it (their name in the email), never lowering anyone, an audit entry
-  (`invite.sent` with `via: "queue"`). About 600 ms apart, so the email service sees at most ~2 a
-  second. People who already use the dashboard (they've signed in) are **skipped** — "Already a
-  member" — so the list can't change an active member's role (use Invite someone for that). Someone
-  invited before who never signed in gets the invitation again. If whoever queued a row is no
-  longer an administrator, it isn't sent.
-- **Watching:** counts (queued · sent · skipped · failed · cancelled), "Next 5 at HH:MM", the next
-  batch (each can be cancelled), and recent results with a status and a readable outcome. The card
-  reloads about 30 seconds after each run while invitations are waiting.
-- **Pause / Resume / Cancel the rest:** Pause stops the next run (a batch already being sent
-  finishes). Cancel the rest cancels every invitation still waiting; ones already sent stay sent.
+  listed with their line number. Up to 500 addresses at a time, plus an optional label ("Safety
+  Meeting · Mar 11"). **Lists are for member businesses only** — invite Public Safety officers and
+  administrators one at a time with Invite someone (the API refuses any other role).
+- **No repeats:** an address already waiting in the queue is skipped, and so is anyone **already
+  invited** — a list invitation that went out, an open invitation (Invite someone, an access code,
+  an approved request) or an existing account. To send them another invitation anyway, tick
+  **Invite again people who were already invited**.
+- **Confirm:** the card checks the list with the server first (nothing is queued yet) and says
+  exactly what will happen: "90 invitations will go out 5 every 15 minutes, starting about 2:45 PM.
+  You can pause any time.", when the last should go out, how many are already waiting ahead, and
+  which addresses are already invited. The start time is never in the past.
+- **Sending:** each cron run (`/api/cron/invites`) claims **one row at a time**, up to 5, re-reading
+  the pause switch before each claim. Right before an email goes out it re-checks — in one statement
+  — that the row is still being sent and not cancelled, and stamps `emailing_at`. Each invitation is
+  sent exactly as Invite someone does (`api/_lib/invite.ts`, shared by both): the member business
+  email, from the administrator who queued it (their name in the email), never lowering anyone, an
+  audit entry (`invite.sent` with `via: "queue"`), with the row's id as the email service's
+  idempotency key. About 600 ms apart, so the email service sees at most ~2 a second. People who
+  already use the dashboard (they've signed in) are skipped — "Already a member". If whoever queued
+  a row is no longer an administrator, it isn't sent.
+- **One run per quarter hour:** each run claims its 15-minute slot with a check-and-set
+  (`last_slot`), so a duplicate delivery of the cron does nothing and can't double the pace.
+- **Watching:** counts (queued · sent · skipped · failed · cancelled), "Next 5 at HH:MM", "Last run
+  HH:MM" with what it did, the next batch (each can be cancelled), and recent results with a status
+  and a readable outcome. If invitations are waiting and nothing has run for over 20 minutes, the
+  card warns that the scheduled sender may be off. It reloads about 30 seconds after each run while
+  invitations are waiting.
+- **Pause / Resume / Cancel the rest:** Pause takes effect at once: nothing more is claimed, and a
+  claimed row whose email hasn't started goes back in the queue. Cancel the rest cancels every
+  waiting invitation and any claimed one whose email hasn't started. Only an email already on its
+  way finishes; invitations already sent stay sent.
+- **The email limit:** when the email service reports its daily (or monthly) sending limit, the
+  queue **pauses itself** — "Paused: the daily email limit was reached" in the card, `pause_reason`
+  in the settings, `queue.paused` by System in Activity — and the row goes back in the queue unsent.
+  Resume once the limit resets.
 - **When something goes wrong:** one failure never stops the others — the row is marked failed with
-  why ("Couldn't send: …"). A rate limit puts the row back for the next run (failed after 3 tries).
-  A row stuck in "sending" for 30 minutes (its run died) goes back in the queue, and is failed after
-  3 tries. A run starts no new send after 20 seconds, well inside Vercel's 30-second limit. Failed
-  and cancelled addresses can be pasted again.
-- **The pace** lives in the one-row `invite_queue_settings` table: `per_run` (1–10, default 5) and
-  `paused`. To send 10 per run: `update public.invite_queue_settings set per_run = 10;`
-- **API** (`/api/admin/invite-queue`, administrators only, every change audited): `add`, `list`,
-  `pause`, `resume`, `cancel` (one `id`, a `label`, or `all: true`). The queue tables have RLS on with
-  no policies: only the server reads or writes them, and only the service role may run
-  `claim_queued_invites()` — which hands each row to exactly one run (`FOR UPDATE SKIP LOCKED`).
+  why ("Couldn't send: …"). A rate limit puts the row back and ends the run (failed after 3 tries).
+  A row stuck in "sending" for 30 minutes (its run died) goes back in the queue if its email never
+  started (failed after 3 tries); if its email had started it is marked failed — **"May have gone
+  out — check before inviting again"** — and never sent again on a guess. No answer at all from the
+  email service is treated the same way. A run starts no new send after 20 seconds, well inside
+  Vercel's 30-second limit.
+- **The pace** lives in the one-row `invite_queue_settings` table: `per_run` (1–10, default 5),
+  `paused` and `pause_reason`, plus `last_slot`, `last_run_at` and `last_run`. To send 10 per run:
+  `update public.invite_queue_settings set per_run = 10;`
+- **API** (`/api/admin/invite-queue`, administrators only, every change audited): `add` (`reinvite`,
+  `dryRun`), `list`, `pause`, `resume`, `cancel` (one `id`, a `label`, or `all: true`). The queue
+  tables have RLS on with no policies: only the server reads or writes them, and only the service
+  role may run `claim_queued_invites()` — which hands each row to exactly one run (`FOR UPDATE SKIP
+  LOCKED`). The statements behind the brakes are tested on Postgres by
+  [`supabase/tests/0008_invite_queue_brakes.test.sql`](./supabase/tests/0008_invite_queue_brakes.test.sql).
 - **Demo mode:** the card shows a sample 92-address list mid-way through, and every action is
   simulated.
 
@@ -440,7 +471,7 @@ scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership 
 scripts/email-previews.ts  every invitation email as HTML + text, to look at without sending
 scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
-supabase/tests/          SQL tests on plain Postgres (0007: who can read which report fields)
+supabase/tests/          SQL tests on plain Postgres (0007: who can read which report fields; 0008: the invite queue's brakes)
 ```
 
 ## Security and privacy
@@ -475,9 +506,10 @@ supabase/tests/          SQL tests on plain Postgres (0007: who can read which r
   officer access is a separate, confirmed action in Team). A failed lookup or write stops before
   any email is sent.
 - Invite a list queues invitations server-side only (no browser access to the queue). The cron
-  that sends them needs Vercel's `CRON_SECRET` (compared in constant time) and fails closed — 503 —
-  without it; each row is sent only while whoever queued it is still an administrator, and people
-  who already use the dashboard are skipped.
+  that sends them needs Vercel's `CRON_SECRET` (at least 16 characters, compared in constant time)
+  and fails closed — 503 — without it; each row is sent only while whoever queued it is still an
+  administrator, lists invite member businesses only, and people who already use the dashboard —
+  or were already invited, unless an administrator asks to invite them again — are skipped.
 - The public map (`/live`) reads only `public_incidents()`: community reports, type, priority,
   status and a position rounded to about 100 m — no text, people, vehicles, photos, reporter or
   address. Officers-only and dismissed reports never appear; admins can pause it or delay it.

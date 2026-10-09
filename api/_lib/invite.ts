@@ -30,11 +30,17 @@ export type InviteResult =
   /** Done. `emailed: false` only for an existing account whose sign-in link couldn't be made. */
   | { kind: 'done'; status: InviteStatus; role: Role; emailed: boolean }
   /** A new address, but no sign-in link could be made: its pending invite stays, nothing was emailed. */
-  | { kind: 'no-link'; role: Role; error: string };
+  | { kind: 'no-link'; role: Role; error: string }
+  /** `beforeSend` said no: nothing was emailed or recorded as sent. */
+  | { kind: 'stopped'; role: Role };
 
 export interface InviteOptions {
   /** `queue`: sent from the paced list — its audit entries carry `via: 'queue'`. */
   via?: 'queue';
+  /** Passed to the email service: the same key within 24 hours is delivered once. */
+  idempotencyKey?: string;
+  /** Asked right before the email goes out; false stops here (the paced list: cancelled or paused). */
+  beforeSend?: () => Promise<boolean>;
 }
 
 /** Validate before calling: `email` normalized (normalizeEmail), `role` parsed (parseRole). */
@@ -75,7 +81,10 @@ export async function inviteByEmail(
     if (existing) return { kind: 'done', status, role: grant.role, emailed: false };
     return { kind: 'no-link', role: grant.role, error: err instanceof Error ? err.message : 'Could not generate invitation link' };
   }
-  await sendEmail(email, invitationEmail({ role: grant.role, source: 'admin', account, email, url, inviterName: from.name }));
+  if (opts.beforeSend && !(await opts.beforeSend())) return { kind: 'stopped', role: grant.role };
+  const message = invitationEmail({ role: grant.role, source: 'admin', account, email, url, inviterName: from.name });
+  if (opts.idempotencyKey) await sendEmail(email, message, { idempotencyKey: opts.idempotencyKey });
+  else await sendEmail(email, message);
   if (!grant.raisedFrom) {
     await audit(admin, from.actor, 'invite.sent', email, {
       role: grant.role,

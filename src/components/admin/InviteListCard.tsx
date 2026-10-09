@@ -1,21 +1,31 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, ChevronDown, Clock, ListChecks, ListPlus, Pause, Play, RefreshCw, Send, TriangleAlert, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Ban, ChevronDown, Clock, History, ListChecks, ListPlus, Pause, Play, RefreshCw, Send, TriangleAlert, X } from 'lucide-react';
 import { MAX_LIST_ENTRIES, parseEmailList } from '../../../api/_lib/emailList';
 import { useToast } from '../../context/ToastContext';
 import { useNow } from '../../hooks/useNow';
 import { cn, plural, timeAgo } from '../../lib/format';
-import type { Role } from '../../types';
 import EmailText from '../account/EmailText';
 import { messageOf } from '../account/util';
 import { ROLE_LABEL } from '../layout/nav';
 import { Button, IconButton } from '../ui/Button';
 import { Card, CardHeader } from '../ui/Card';
 import { Banner } from '../ui/Feedback';
-import { Field, Input, Select, Textarea } from '../ui/Form';
+import { Field, Input, Textarea } from '../ui/Form';
 import { Dialog } from '../ui/Overlay';
 import ListSkeleton from './ListSkeleton';
-import { clockAt, COUNT_TONE, COUNTED, nextRun, schedule, STATUS_LABEL, STATUS_TONE, type QueueItem, type QueueState } from './inviteQueue';
-import { INVITE_ROLES, ROLE_HINT, roleNoun } from './team';
+import {
+  clockAt,
+  COUNT_TONE,
+  COUNTED,
+  looksStalled,
+  nextRun,
+  schedule,
+  STATUS_LABEL,
+  STATUS_TONE,
+  type AddResult,
+  type QueueItem,
+  type QueueState,
+} from './inviteQueue';
 import { useInviteQueue } from './useInviteQueue';
 
 interface InviteListCardProps {
@@ -24,17 +34,7 @@ interface InviteListCardProps {
   onSent?: () => void;
 }
 
-const ROLE_WARNING: Partial<Record<Role, string>> = {
-  officer:
-    'Everyone on this list becomes a Public Safety officer: they see every report, internal notes and reporters’ contact details. Keep officer lists short.',
-  admin: 'Everyone on this list becomes an administrator: everything officers see, plus deciding who’s on the network.',
-};
-
 const RECENT_SHOWN = 6;
-
-function asRole(value: string): Role {
-  return value === 'admin' || value === 'officer' ? value : 'business';
-}
 
 /** The label every item shares, if they all have the same one: shown once, above the list. */
 function sharedLabel(items: QueueItem[]): string | null {
@@ -95,21 +95,34 @@ function QueueRow({
   );
 }
 
+/** "4 sent · 1 skipped" — what the last run did (nothing to report: "nothing to send"). */
+function lastRunSummary(r: QueueState['lastRun']): string {
+  const parts = [
+    r?.sent ? `${r.sent} sent` : null,
+    r?.skipped ? `${r.skipped} skipped` : null,
+    r?.failed ? `${r.failed} failed` : null,
+    r?.cancelled ? `${r.cancelled} cancelled` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'nothing to send';
+}
+
 /**
- * Admin › Team: invite a whole list — say, a safety meeting's sign-in sheet. Invitations go out a few at a
- * time (5 every 15 minutes) from the administrator who queued them, so emails trickle out and the team can
- * watch, pause, or cancel the rest. Each one is the same invitation Invite someone sends.
+ * Admin › Team: invite a whole list of member businesses — say, a safety meeting's sign-in sheet.
+ * Invitations go out a few at a time (5 every 15 minutes) from the administrator who queued them, so
+ * emails trickle out and the team can watch, pause, or cancel the rest. Each one is the same invitation
+ * Invite someone sends. People already invited aren't invited again unless "Invite again" is ticked.
  */
 export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) {
   const q = useInviteQueue(isDemo);
   const now = useNow();
   const { push } = useToast();
+  const reinviteId = useId();
   const [text, setText] = useState('');
-  // Least access first, like Invite someone.
-  const [role, setRole] = useState<Role>('business');
   const [label, setLabel] = useState('');
+  const [reinvite, setReinvite] = useState(false);
   const [error, setError] = useState('');
-  const [reviewing, setReviewing] = useState(false);
+  /** The dry run the confirm step shows (null: closed). */
+  const [review, setReview] = useState<AddResult | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -117,9 +130,11 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
   const parsed = useMemo(() => parseEmailList(text), [text]);
   const count = parsed.entries.length;
   const s = q.state;
-  const plan = s ?? { counts: { queued: 0, sending: 0, sent: 0, skipped: 0, failed: 0, cancelled: 0 }, perRun: 5, everyMinutes: 15, nextRunAt: nextRun(now), paused: false };
   const waiting = s?.counts.queued ?? 0;
-  const batch = Math.min(plan.perRun, waiting);
+  const perRun = s?.perRun ?? 5;
+  const batch = Math.min(perRun, waiting);
+  // Never a time in the past, even if the last load is a while old.
+  const nextAt = s ? Math.max(s.nextRunAt, nextRun(now, s.everyMinutes)) : nextRun(now);
 
   // As invitations go out, the team changes (new accounts, open invitations): let the page reload it.
   const lastSent = useRef<number | null>(null);
@@ -129,7 +144,9 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
     lastSent.current = s.counts.sent;
   }, [s, onSent]);
 
-  const review = (e: FormEvent) => {
+  const input = () => ({ text, label: label.trim(), reinvite });
+
+  const openReview = async (e: FormEvent) => {
     e.preventDefault();
     if (!count) {
       setError(text.trim() ? 'No email addresses found — put one on each line, like name@business.com.' : 'Paste at least one email address.');
@@ -140,32 +157,51 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
       return;
     }
     setError('');
-    setReviewing(true);
+    setBusy('preview');
+    try {
+      setReview(await q.preview(input()));
+    } catch (err) {
+      push({ title: 'Couldn’t check the list', body: messageOf(err, 'Please try again.'), tone: 'danger' });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const queueList = async () => {
     setBusy('add');
-    const when = schedule(plan, count);
+    const pace = review?.queue;
+    const when = schedule(
+      pace ? { counts: { ...(s?.counts ?? emptyCounts), queued: pace.queued }, perRun: pace.perRun, everyMinutes: pace.everyMinutes, nextRunAt: new Date(pace.nextRunAt).getTime() } : planFrom(s, now),
+      review?.added ?? count,
+      Date.now(),
+    );
+    const paused = pace?.paused ?? s?.paused ?? false;
     try {
-      const r = await q.add({ text, role, label: label.trim() });
-      const already = r.skipped ? ` ${plural(r.skipped, 'address', 'addresses')} ${r.skipped === 1 ? 'was' : 'were'} already waiting.` : '';
+      const r = await q.add(input());
+      const notes = [
+        r.alreadyInvited ? `${plural(r.alreadyInvited, 'address', 'addresses')} already invited — not invited again.` : '',
+        r.skipped ? `${plural(r.skipped, 'address', 'addresses')} already waiting.` : '',
+        isDemo ? 'Demo mode: nothing is sent.' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
       if (r.added) {
         push({
           title: `${plural(r.added, 'invitation')} queued`,
-          body:
-            (plan.paused
+          body: `${
+            paused
               ? `The queue is paused — ${r.added === 1 ? 'it goes' : 'they go'} out once you resume.`
-              : `${r.added === 1 ? 'It goes' : 'The first go'} out about ${clockAt(when.first, now)}.`) +
-            already +
-            (isDemo ? ' Demo mode: nothing is sent.' : ''),
+              : `${r.added === 1 ? 'It goes' : 'The first go'} out about ${clockAt(when.first, Date.now())}.`
+          } ${notes}`.trim(),
           tone: 'success',
         });
       } else {
-        push({ title: 'Nothing new to queue', body: r.skipped ? 'Every address is already waiting in the queue.' : 'No email addresses found.', tone: 'info' });
+        push({ title: 'Nothing new to queue', body: notes || 'No email addresses found.', tone: 'info' });
       }
       setText('');
       setLabel('');
-      setReviewing(false);
+      setReinvite(false);
+      setReview(null);
     } catch (err) {
       push({ title: 'Couldn’t queue the list', body: messageOf(err, 'Please try again.'), tone: 'danger' });
     } finally {
@@ -180,9 +216,9 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
       push({
         title: paused ? 'Queue paused' : 'Queue resumed',
         body: paused
-          ? 'Nothing goes out until you resume.'
+          ? 'Nothing more goes out until you resume — an email already on its way finishes.'
           : waiting
-            ? `${batch === 1 ? 'The next one goes' : `The next ${batch} go`} out about ${clockAt(nextRun(Date.now(), plan.everyMinutes), now)}.`
+            ? `${batch === 1 ? 'The next one goes' : `The next ${batch} go`} out about ${clockAt(nextRun(Date.now(), s?.everyMinutes ?? 15), now)}.`
             : 'Lists you queue go out at the next run.',
         tone: 'success',
       });
@@ -225,9 +261,9 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
   ]
     .filter(Boolean)
     .join(' · ');
-  const when = schedule(plan, count);
   const total = s ? Object.values(s.counts).reduce((a, b) => a + b, 0) : 0;
   const recent = s ? (showAll ? s.recent : s.recent.slice(0, RECENT_SHOWN)) : [];
+  const stalled = s ? looksStalled(s, now) : false;
 
   return (
     <Card padded={false}>
@@ -235,7 +271,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
         <CardHeader
           icon={<ListPlus className="h-[18px] w-[18px]" />}
           title="Invite a list"
-          subtitle="Paste addresses from a meeting or sign-in sheet. Invitations go out a few at a time, so you can watch and pause."
+          subtitle="Paste member businesses from a meeting or sign-in sheet. Invitations go out a few at a time, so you can watch and pause."
           action={
             !isDemo && (
               <IconButton label="Refresh the queue" size="sm" onClick={q.refresh}>
@@ -244,7 +280,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
             )
           }
         />
-        <form onSubmit={review} noValidate className="space-y-4">
+        <form onSubmit={(e) => void openReview(e)} noValidate className="space-y-4">
           <Field label="Email addresses" error={error || undefined} hint={summary || 'One per line. “Name <email>” works too; repeats are left out.'}>
             {(id) => (
               <Textarea
@@ -274,27 +310,32 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
               {parsed.invalid.length > 3 && <li>…and {plural(parsed.invalid.length - 3, 'more line')}</li>}
             </ul>
           )}
-          <Field label="Invite as" hint={ROLE_HINT[role]}>
-            {(id) => (
-              <Select id={id} value={role} onChange={(e) => setRole(asRole(e.target.value))}>
-                {INVITE_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          {ROLE_WARNING[role] && (
-            <Banner tone="warning" icon={<TriangleAlert className="h-4 w-4" />}>
-              {ROLE_WARNING[role]}
-            </Banner>
-          )}
+          <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-[12px] leading-relaxed text-muted">
+            <span className="font-semibold text-ink-2">Everyone on the list is invited as a member business.</span> Invite Public Safety
+            officers and administrators one at a time with Invite someone.
+          </p>
           <Field label="Label" optional hint="Where the list came from — only administrators see it.">
             {(id) => <Input id={id} value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} placeholder="Safety Meeting · Mar 11" />}
           </Field>
-          <Button type="submit" block icon={<ListChecks className="h-4 w-4" />}>
-            {count ? `Review ${plural(count, 'invitation')}` : 'Review invitations'}
+          <div className="flex items-start gap-3">
+            <input
+              id={reinviteId}
+              type="checkbox"
+              checked={reinvite}
+              onChange={(e) => setReinvite(e.target.checked)}
+              className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer accent-primary"
+            />
+            <label htmlFor={reinviteId} className="min-w-0 cursor-pointer">
+              <span className="block text-[13px] font-medium text-ink">Invite again people who were already invited</span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-muted">
+                {reinvite
+                  ? 'They get another invitation email. People who already use the dashboard are still skipped.'
+                  : 'Off: anyone already invited — by a list, Invite someone, an access code or an approved request — is left out.'}
+              </span>
+            </label>
+          </div>
+          <Button type="submit" block loading={busy === 'preview'} icon={<ListChecks className="h-4 w-4" />}>
+            {count ? `Review ${plural(count, 'address', 'addresses')}` : 'Review the list'}
           </Button>
           <p className="text-[12px] leading-relaxed text-subtle">
             {isDemo
@@ -321,13 +362,13 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
               <p className="flex items-center gap-1.5 text-[13px] font-semibold text-ink" aria-live="polite">
                 {s.paused ? (
                   <>
-                    <Pause className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
-                    Paused
+                    <Pause className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                    {s.pauseReason ? `Paused: ${s.pauseReason}` : 'Paused'}
                   </>
                 ) : waiting ? (
                   <>
-                    <Clock className="h-4 w-4 text-accent-strong" aria-hidden />
-                    Next {batch} at {clockAt(s.nextRunAt, now)}
+                    <Clock className="h-4 w-4 flex-shrink-0 text-accent-strong" aria-hidden />
+                    Next {batch} at {clockAt(nextAt, now)}
                   </>
                 ) : (
                   'Nothing waiting'
@@ -359,8 +400,20 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
             </div>
             {s.paused && (
               <p className="mt-2 text-[12px] leading-relaxed text-muted">
-                {waiting ? `${plural(waiting, 'invitation')} waiting. ` : ''}Nothing goes out until you resume.
+                {waiting ? `${plural(waiting, 'invitation')} waiting. ` : ''}Nothing goes out until you resume, apart from an email already
+                on its way.
+                {s.pauseReason ? ' Resume once the limit resets — tomorrow for a daily limit.' : ''}
               </p>
+            )}
+            <p className="mt-2 flex items-center gap-1.5 text-[12px] text-muted">
+              <History className="h-3.5 w-3.5 flex-shrink-0" aria-hidden />
+              {s.lastRunAt ? `Last run ${clockAt(s.lastRunAt, now)} · ${lastRunSummary(s.lastRun)}` : 'No run yet'}
+            </p>
+            {stalled && (
+              <Banner tone="warning" icon={<TriangleAlert className="h-4 w-4" />} title="Nothing has gone out for over 20 minutes" className="mt-3">
+                Invitations are waiting, but no run has happened. The scheduled sender may be off — check the cron job and CRON_SECRET in
+                Vercel.
+              </Banner>
             )}
 
             <dl className="mt-4 grid grid-cols-5 gap-1.5">
@@ -418,35 +471,23 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
       </div>
 
       <Dialog
-        open={reviewing}
-        onClose={() => busy !== 'add' && setReviewing(false)}
+        open={review !== null}
+        onClose={() => busy !== 'add' && setReview(null)}
         icon={<ListChecks className="h-5 w-5" />}
-        title={`Queue ${plural(count, 'invitation')}?`}
-        description={`As ${roleNoun(role)}${label.trim() ? ` · ${label.trim()}` : ''}`}
+        title={review?.added ? `Queue ${plural(review.added, 'invitation')}?` : 'Nothing new to invite'}
+        description={`As member businesses${label.trim() ? ` · ${label.trim()}` : ''}`}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setReviewing(false)} disabled={busy === 'add'}>
+            <Button variant="secondary" onClick={() => setReview(null)} disabled={busy === 'add'}>
               Back
             </Button>
-            <Button loading={busy === 'add'} icon={<Send className="h-4 w-4" />} onClick={() => void queueList()}>
-              Queue {plural(count, 'invitation')}
+            <Button loading={busy === 'add'} disabled={!review?.added} icon={<Send className="h-4 w-4" />} onClick={() => void queueList()}>
+              {review?.added ? `Queue ${plural(review.added, 'invitation')}` : 'Queue'}
             </Button>
           </>
         }
       >
-        <ReviewText count={count} plan={plan} when={when} now={now} />
-        <ul className="mt-4 space-y-1.5 rounded-xl bg-surface-2 p-3 text-[13px] leading-relaxed text-ink-2">
-          <li>Everyone gets the invitation for {roleNoun(role)}, from you.</li>
-          <li>People who already use the dashboard are skipped, and an invitation never lowers anyone’s role.</li>
-          {parsed.duplicates > 0 && <li>{plural(parsed.duplicates, 'repeated address', 'repeated addresses')} left out.</li>}
-          {parsed.invalid.length > 0 && (
-            <li>
-              {plural(parsed.invalid.length, 'line')} {parsed.invalid.length === 1 ? 'isn’t an email address' : 'aren’t email addresses'} and{' '}
-              {parsed.invalid.length === 1 ? 'is' : 'are'} left out
-              {parsed.invalid.length <= 3 ? `: ${parsed.invalid.map((l) => `line ${l.line}`).join(', ')}` : ''}.
-            </li>
-          )}
-        </ul>
+        {review && <ReviewText review={review} fallback={planFrom(s, now)} now={now} />}
       </Dialog>
 
       <Dialog
@@ -467,44 +508,83 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-ink-2">They won’t be sent. Invitations that already went out stay sent.</p>
+        <p className="text-sm leading-relaxed text-ink-2">
+          They won’t be sent. If a run is emailing one right now, that one still goes out. Invitations that already went out stay sent.
+        </p>
       </Dialog>
     </Card>
   );
 }
 
+const emptyCounts = { queued: 0, sending: 0, sent: 0, skipped: 0, failed: 0, cancelled: 0 };
+
+/** The queue's pace for the confirm step when there's no fresher dry run. */
+function planFrom(s: QueueState | null, now: number) {
+  return s
+    ? { counts: s.counts, perRun: s.perRun, everyMinutes: s.everyMinutes, nextRunAt: s.nextRunAt, paused: s.paused }
+    : { counts: emptyCounts, perRun: 5, everyMinutes: 15, nextRunAt: nextRun(now), paused: false };
+}
+
 /** "92 invitations will go out 5 every 15 minutes, starting about 2:45 PM. You can pause any time." */
-function ReviewText({
-  count,
-  plan,
-  when,
-  now,
-}: {
-  count: number;
-  plan: Pick<QueueState, 'paused' | 'perRun' | 'everyMinutes' | 'counts'>;
-  when: { first: number; last: number; runs: number };
-  now: number;
-}) {
+function ReviewText({ review, fallback, now }: { review: AddResult; fallback: ReturnType<typeof planFrom>; now: number }) {
+  const pace = review.queue
+    ? {
+        counts: { ...fallback.counts, queued: review.queue.queued },
+        perRun: review.queue.perRun,
+        everyMinutes: review.queue.everyMinutes,
+        nextRunAt: new Date(review.queue.nextRunAt).getTime(),
+        paused: review.queue.paused,
+      }
+    : fallback;
+  const count = review.added;
+  const when = schedule(pace, count, now);
   const n = <strong className="font-semibold text-ink">{plural(count, 'invitation')}</strong>;
   const start = <strong className="font-semibold text-ink">{clockAt(when.first, now)}</strong>;
-  const ahead = plan.counts.queued;
+  const ahead = pace.counts.queued;
   return (
-    <div className="space-y-2 text-sm leading-relaxed text-ink-2">
-      {plan.paused ? (
-        <p>
-          {n} will go out {plan.perRun} every {plan.everyMinutes} minutes once you resume the queue — it’s paused now.
-        </p>
-      ) : count > plan.perRun ? (
-        <p>
-          {n} will go out {plan.perRun} every {plan.everyMinutes} minutes, starting about {start}. You can pause any time.
-        </p>
-      ) : (
-        <p>
-          {n} will go out about {start}. You can pause any time.
-        </p>
-      )}
-      {!plan.paused && when.runs > 1 && <p className="text-[13px] text-muted">The last should go out about {clockAt(when.last, now)}.</p>}
-      {ahead > 0 && <p className="text-[13px] text-muted">{plural(ahead, 'invitation')} already waiting go first.</p>}
-    </div>
+    <>
+      <div className="space-y-2 text-sm leading-relaxed text-ink-2">
+        {count === 0 ? (
+          <p>Everyone on this list is already invited or already waiting in the queue.</p>
+        ) : pace.paused ? (
+          <p>
+            {n} will go out {pace.perRun} every {pace.everyMinutes} minutes once you resume the queue — it’s paused now.
+          </p>
+        ) : count > pace.perRun ? (
+          <p>
+            {n} will go out {pace.perRun} every {pace.everyMinutes} minutes, starting about {start}. You can pause any time.
+          </p>
+        ) : (
+          <p>
+            {n} will go out about {start}. You can pause any time.
+          </p>
+        )}
+        {count > 0 && !pace.paused && when.runs > 1 && <p className="text-[13px] text-muted">The last should go out about {clockAt(when.last, now)}.</p>}
+        {count > 0 && ahead > 0 && <p className="text-[13px] text-muted">{plural(ahead, 'invitation')} already waiting go first.</p>}
+      </div>
+      <ul className="mt-4 space-y-1.5 rounded-xl bg-surface-2 p-3 text-[13px] leading-relaxed text-ink-2">
+        <li>Everyone gets the invitation for a member business, from you.</li>
+        {review.alreadyInvited > 0 && (
+          <li>
+            <span className="font-semibold text-ink">{plural(review.alreadyInvited, 'address', 'addresses')} already invited</span> — not invited
+            again
+            {review.alreadyInvitedEmails.length > 0 &&
+              `: ${review.alreadyInvitedEmails.slice(0, 5).join(', ')}${review.alreadyInvited > 5 ? ` and ${review.alreadyInvited - 5} more` : ''}`}
+            . Tick “Invite again” to send them another.
+          </li>
+        )}
+        {review.reinvited > 0 && <li>{plural(review.reinvited, 'address', 'addresses')} already invited will get another invitation.</li>}
+        {review.skipped > 0 && <li>{plural(review.skipped, 'address', 'addresses')} already waiting in the queue — left as they are.</li>}
+        <li>People who already use the dashboard are skipped when their turn comes.</li>
+        {review.duplicates > 0 && <li>{plural(review.duplicates, 'repeated address', 'repeated addresses')} left out.</li>}
+        {review.invalid > 0 && (
+          <li>
+            {plural(review.invalid, 'line')} {review.invalid === 1 ? 'isn’t an email address' : 'aren’t email addresses'} and{' '}
+            {review.invalid === 1 ? 'is' : 'are'} left out
+            {review.invalid <= 3 ? `: ${review.invalidLines.map((l) => `line ${l.line}`).join(', ')}` : ''}.
+          </li>
+        )}
+      </ul>
+    </>
   );
 }
