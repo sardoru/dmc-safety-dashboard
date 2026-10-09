@@ -35,23 +35,38 @@ export interface FeedStep {
   event?: FeedEvent;
 }
 
-export function applyFeedChange(list: Incident[], change: FeedChange): FeedStep {
+/**
+ * Apply one change. `me` is the viewer: a full row of *their* report is never touched by its copy. (A full row of
+ * someone else's — left from before migration 0007 on an open dashboard — is replaced or removed by copy events.)
+ */
+export function applyFeedChange(list: Incident[], change: FeedChange, me?: string | null): FeedStep {
+  const yours = (i: Incident | undefined) => Boolean(i && !i.limited && (me == null || i.reporterId === me));
+
   if (change.type === 'DELETE') {
     const existing = list.find((i) => i.id === change.id);
     // A copy going away (deleted, or no longer shared) never takes your own report with it.
-    if (!existing || (change.from === 'community' && !existing.limited)) return { list };
+    if (!existing || (change.from === 'community' && yours(existing))) return { list };
     return { list: list.filter((i) => i.id !== change.id) };
   }
 
   const inc = change.incident;
   const existing = list.find((i) => i.id === inc.id);
   // Your own report is here in full: its copy adds nothing.
-  if (change.from === 'community' && existing && !existing.limited) return { list };
+  if (change.from === 'community' && yours(existing)) return { list };
 
   if (change.type === 'INSERT') {
-    if (!existing) return { list: sortIncidents([inc, ...list]), event: { type: 'created', incident: inc } };
-    // Already known. The full row replaces a copy of it, with no second alert.
-    if (change.from === 'reports' && existing.limited) return { list: list.map((i) => (i.id === inc.id ? inc : i)) };
+    if (!existing) {
+      // A copy of an older report (shared with the community later, or restored by re-running 0007) is not a new
+      // report: it joins the list quietly, as an update — never as a nearby alert. A new report's copy is written
+      // in the same transaction it is filed in, so its two timestamps match.
+      const news = change.from === 'reports' || inc.updatedAt === inc.createdAt;
+      return {
+        list: sortIncidents([inc, ...list]),
+        event: news ? { type: 'created', incident: inc } : { type: 'updated', incident: inc },
+      };
+    }
+    // Already known, so no second alert: a full row replaces a copy of it; a copy replaces a copy or a stale row.
+    if (change.from === 'community' || existing.limited) return { list: list.map((i) => (i.id === inc.id ? inc : i)) };
     return { list };
   }
 

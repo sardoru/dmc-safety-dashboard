@@ -44,7 +44,9 @@ export async function detectSchema(): Promise<SchemaCaps> {
     v2: !missing(v2.error),
     updates: !missing(updates.error),
     bolos: !missing(bolos.error),
-    community: !missing(community.error),
+    // Only a read that worked counts (reading copies that aren't there would leave a member with an empty list).
+    // An error that isn't a clear "no such table" gets one more try.
+    community: !community.error || (!missing(community.error) && (await hasCommunityReports())),
   };
 }
 

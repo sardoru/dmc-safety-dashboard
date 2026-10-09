@@ -68,6 +68,8 @@ const DEMO_KEY = 'dt-demo-incidents-v2';
 const EMPTY: Incident[] = [];
 /** Before migration 0007, how often a member's dashboard looks for it. */
 const RECHECK_MS = 120_000;
+/** How long a member's first load waits for its Realtime channel, so nothing lands between the two. */
+const JOIN_WAIT_MS = 2_500;
 let channelSeq = 0;
 
 function loadDemo(): { incidents: Incident[]; updates: IncidentUpdate[] } {
@@ -93,9 +95,11 @@ function groupUpdates(list: IncidentUpdate[]): Record<string, IncidentUpdate[]> 
 }
 
 export function IncidentProvider({ children }: { children: ReactNode }) {
-  const { configured, user, userId, displayName, role } = useAuth();
+  const { configured, loading: authLoading, user, userId, displayName, role } = useAuth();
   const toast = useToast();
   const demo = !configured;
+  /** Officers and admins read every report; everyone else signed in reads like a member business. */
+  const staff = role === 'officer' || role === 'admin';
 
   const [demoState] = useState(() => (demo ? loadDemo() : null));
   const [incidents, setIncidents] = useState<Incident[]>(() => sortIncidents(demoState?.incidents ?? []));
@@ -159,16 +163,32 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [demo, incidents, updates]);
 
+  /**
+   * Apply a change to the list and to `incidentsRef` at once: the next Realtime message, often in the same batch
+   * (a member's own report, then its copy), must see it before React renders.
+   */
+  const applyChange = useCallback((change: FeedChange, me: string | null) => {
+    const step = applyFeedChange(incidentsRef.current, change, me);
+    incidentsRef.current = step.list;
+    setIncidents((prev) => applyFeedChange(prev, change, me).list);
+    return step.event;
+  }, []);
+
+  const replaceAll = useCallback((list: Incident[]) => {
+    incidentsRef.current = list;
+    setIncidents(list);
+  }, []);
+
   // ── Connected: load + realtime ──────────────────────────────────────────
   // Officers and admins read every report from `reports`. A member business reads its own reports there (every
   // field) and everyone else's community reports from `community_reports` (migration 0007): copies without the
   // reporter, contact details, transcript, photos or internal fields. Until 0007 is applied a member reads
   // `reports` as before and looks for it every two minutes, so an open dashboard switches over by itself.
   useEffect(() => {
-    if (demo || !user || !role) return;
+    if (demo || !user || authLoading) return;
     let active = true;
     const me = user.id;
-    const member = role === 'business';
+    const member = !staff;
     const channels: RealtimeChannel[] = [];
     let lookTimer: number | undefined;
     let onVisible: (() => void) | undefined;
@@ -188,8 +208,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
             : rowToIncident(row as unknown as ReportRow);
         change = { from, type: payload.eventType, incident };
       }
-      const { event } = applyFeedChange(incidentsRef.current, change);
-      setIncidents((prev) => applyFeedChange(prev, change).list);
+      const event = applyChange(change, me);
       if (event?.type === 'created') {
         bumpNow();
         emit({ type: 'created', incident: event.incident, own: event.incident.reporterId === meRef.current.userId });
@@ -199,21 +218,29 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
     };
 
     // Both tables on one channel: Realtime keeps their order, so a member's own new report (from `reports`)
-    // always lands before its copy and is never announced to them as a nearby alert.
-    const listen = (copies: boolean) => {
-      let channel = supabase
-        .channel(`reports-${++channelSeq}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, (p) => onChange('reports', p));
-      if (copies) {
-        channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, (p) =>
-          onChange('community', p),
+    // always lands before its copy and is never announced to them as a nearby alert. Resolves once the channel
+    // is live (or has failed, or after JOIN_WAIT_MS).
+    const listen = (copies: boolean) =>
+      new Promise<void>((resolve) => {
+        let channel = supabase
+          .channel(`reports-${++channelSeq}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, (p) => onChange('reports', p));
+        if (copies) {
+          channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, (p) =>
+            onChange('community', p),
+          );
+        }
+        const timer = window.setTimeout(resolve, JOIN_WAIT_MS);
+        channels.push(
+          channel.subscribe(() => {
+            window.clearTimeout(timer);
+            resolve();
+          }),
         );
-      }
-      channels.push(channel.subscribe());
-    };
+      });
 
     // Officers and admins: every report, subscribed at once.
-    if (!member) listen(false);
+    if (!member) void listen(false);
 
     channels.push(
       supabase
@@ -234,7 +261,9 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       setCaps(found);
       const copies = member && found.community;
-      if (member) listen(copies);
+      // Members subscribe before reading, so a change made in between still arrives.
+      if (member) await listen(copies);
+      if (!active) return;
 
       if (member && !copies) {
         // Before migration 0007: when it turns up, load again from the copies.
@@ -272,7 +301,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
         // Merged, not replaced: a mark made while this was loading stays.
         if (!seen.error && Array.isArray(seen.data)) for (const id of seen.data as string[]) seenRef.current.add(id);
         const seenNow = seenRef.current;
-        setIncidents(
+        replaceAll(
           mergeFeeds(
             (own.data ?? []).map((r) => rowToIncident(r as ReportRow)),
             ((shared.data ?? []) as unknown as CommunityReportRow[]).map((r) =>
@@ -289,7 +318,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         // A failed read keeps what is on screen rather than showing "all clear".
         if (reports.error) throw reports.error;
-        setIncidents(sortIncidents((reports.data ?? []).map((r) => rowToIncident(r as ReportRow))));
+        replaceAll(sortIncidents((reports.data ?? []).map((r) => rowToIncident(r as ReportRow))));
         if (!upd.error) setUpdates(groupUpdates(((upd.data ?? []) as UpdateRow[]).map(rowToUpdate)));
       }
       setLoadedFor(me);
@@ -304,7 +333,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
       if (lookTimer !== undefined) window.clearInterval(lookTimer);
       if (onVisible) document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [demo, user, role, emit, recheck]);
+  }, [demo, user, authLoading, staff, emit, recheck, applyChange, replaceAll]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   const byId = useCallback((id: string) => incidents.find((i) => i.id === id), [incidents]);
@@ -496,14 +525,14 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
       if (result.error) throw new Error(result.error.message);
 
       const inc = rowToIncident(result.data as ReportRow);
-      // Added once; if its community copy got here first, the full row replaces it.
-      setIncidents((prev) => applyFeedChange(prev, { from: 'reports', type: 'INSERT', incident: inc }).list);
+      // Added once (list and ref together); if its community copy got here first, the full row replaces it.
+      applyChange({ from: 'reports', type: 'INSERT', incident: inc }, me.userId);
       bumpNow();
       emit({ type: 'created', incident: inc, own: true });
       void recordUpdate(inc.id, 'system', `Report received ${via}.`);
       return inc;
     },
-    [demo, emit, appendUpdate, recordUpdate, toast],
+    [demo, emit, appendUpdate, recordUpdate, toast, applyChange],
   );
 
   // ── Officer actions ─────────────────────────────────────────────────────

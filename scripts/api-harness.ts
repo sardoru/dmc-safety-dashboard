@@ -1173,51 +1173,69 @@ async function main() {
   };
   const own = rowToIncident(ownRow);
   const copyOfOwn = communityRowToIncident({ ...copyRow, status: 'active' }, null);
-  const other = communityRowToIncident({ ...copyRow, id: 'beef0000-0000-0000-0000-000000000010', created_at: reportedAgo(1), title: 'Window smashed' }, null);
+  // A brand-new report's copy: written in the transaction that filed it, so both timestamps match.
+  const filedNow = reportedAgo(1);
+  const other = communityRowToIncident({ ...copyRow, id: 'beef0000-0000-0000-0000-000000000010', created_at: filedNow, updated_at: filedNow, title: 'Window smashed' }, null);
   const merged = mergeFeeds([own], [copyOfOwn, other]);
   check(
     'first load: your own report in full wins over its copy; other reports come in as copies, newest first',
     merged.length === 2 && merged[0] === other && merged[1] === own && merged[1].transcript === 'my own words',
     merged.map((i) => [i.id, i.limited]),
   );
-  let step = applyFeedChange([], { from: 'community', type: 'INSERT', incident: other });
+  let step = applyFeedChange([], { from: 'community', type: 'INSERT', incident: other }, ME);
   check(
     'a new copy → added and announced as someone else’s (the nearby alert)',
     step.list.length === 1 && step.event?.type === 'created' && step.event.incident.reporterId === undefined,
     step,
   );
-  step = applyFeedChange([], { from: 'reports', type: 'INSERT', incident: own });
+  const sharedLater = communityRowToIncident({ ...copyRow, id: 'beef0000-0000-0000-0000-000000000011', created_at: reportedAgo(180), updated_at: reportedAgo(0), status: 'resolved' }, null);
+  step = applyFeedChange([own], { from: 'community', type: 'INSERT', incident: sharedLater }, ME);
+  check(
+    'a copy of an older report (shared later, or restored by re-running 0007) joins quietly: an update, not an alert',
+    step.list.length === 2 && step.event?.type === 'updated' && step.event.previous === undefined,
+    step,
+  );
+  step = applyFeedChange([], { from: 'reports', type: 'INSERT', incident: own }, ME);
   const ownFirst = step;
-  step = applyFeedChange(ownFirst.list, { from: 'community', type: 'INSERT', incident: copyOfOwn });
+  step = applyFeedChange(ownFirst.list, { from: 'community', type: 'INSERT', incident: copyOfOwn }, ME);
   check(
     'your own new report, then its copy: one alert (yours), the copy changes nothing',
     ownFirst.event?.type === 'created' && ownFirst.event.incident.reporterId === ME && step.list === ownFirst.list && !step.event,
     step,
   );
-  step = applyFeedChange([copyOfOwn], { from: 'reports', type: 'INSERT', incident: own });
+  step = applyFeedChange([copyOfOwn], { from: 'reports', type: 'INSERT', incident: own }, ME);
   check('…and if the copy came first, the full row replaces it with no second alert', step.list.length === 1 && step.list[0] === own && !step.event, step);
-  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: { ...copyOfOwn, status: 'responding' } });
+  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: { ...copyOfOwn, status: 'responding' } }, ME);
   check('a copy’s update never overwrites your own full report', step.list[0] === own && !step.event, step);
-  step = applyFeedChange([own], { from: 'community', type: 'DELETE', id: own.id });
+  step = applyFeedChange([own], { from: 'community', type: 'DELETE', id: own.id }, ME);
   check('…nor does its delete (made officers-only) remove it', step.list.length === 1 && step.list[0] === own, step);
-  step = applyFeedChange([other, own], { from: 'community', type: 'DELETE', id: other.id });
+  step = applyFeedChange([other, own], { from: 'community', type: 'DELETE', id: other.id }, ME);
   check('a copy that goes away (deleted, or officers-only now) leaves the list', step.list.length === 1 && step.list[0] === own, step);
   const responding = { ...other, status: 'responding' as const };
-  step = applyFeedChange([other], { from: 'community', type: 'UPDATE', incident: responding });
+  step = applyFeedChange([other], { from: 'community', type: 'UPDATE', incident: responding }, ME);
   check(
     'a copy’s update replaces it and is passed on as an update (no new alert)',
     step.list[0] === responding && step.event?.type === 'updated' && step.event.previous === other,
     step,
   );
-  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: other });
+  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: other }, ME);
   check(
     'an update for a report not loaded yet adds it quietly (an update, not an alert)',
     step.list.length === 2 && step.event?.type === 'updated' && step.event.previous === undefined,
     step,
   );
-  step = applyFeedChange([own], { from: 'reports', type: 'INSERT', incident: own });
+  // An open dashboard that switched over when 0007 landed still holds other members' full rows from before.
+  const staleFull = rowToIncident({ ...ownRow, id: other.id, reporter_id: '99999999-9999-9999-9999-999999999999' });
+  const staleUpdated = applyFeedChange([staleFull, own], { from: 'community', type: 'UPDATE', incident: responding }, ME);
+  const staleGone = applyFeedChange([staleFull, own], { from: 'community', type: 'DELETE', id: other.id }, ME);
+  check(
+    'after switching over, a copy replaces or removes someone else’s full row left from before 0007',
+    staleUpdated.list[0] === responding && staleUpdated.list[0].limited === true && staleGone.list.length === 1 && staleGone.list[0] === own,
+    { staleUpdated: staleUpdated.list.map((i) => [i.id, i.limited]), staleGone: staleGone.list.map((i) => i.id) },
+  );
+  step = applyFeedChange([own], { from: 'reports', type: 'INSERT', incident: own }, ME);
   const staffInsert = step;
-  step = applyFeedChange([own], { from: 'reports', type: 'DELETE', id: own.id });
+  step = applyFeedChange([own], { from: 'reports', type: 'DELETE', id: own.id }, ME);
   check(
     'officers’ feed unchanged: a known insert is ignored, a delete removes',
     staffInsert.list.length === 1 && !staffInsert.event && step.list.length === 0,
