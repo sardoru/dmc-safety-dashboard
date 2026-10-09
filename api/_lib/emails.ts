@@ -135,12 +135,15 @@ function getResend(): Resend {
 
 export async function sendEmail(to: string, email: BrandedEmail): Promise<void> {
   const from = process.env.EMAIL_FROM || 'Core Downtown Memphis Safety <onboarding@resend.dev>';
+  // The sending domain has no inbox: replies go to a monitored address when one is set.
+  const replyTo = process.env.EMAIL_REPLY_TO?.trim();
   const { error } = await getResend().emails.send({
     from,
     to,
     subject: email.subject,
     html: email.html,
     text: email.text,
+    ...(replyTo ? { replyTo } : {}),
   });
   if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Email send failed');
 }
