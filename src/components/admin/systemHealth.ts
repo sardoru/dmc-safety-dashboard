@@ -61,7 +61,7 @@ export function schemaComplete(caps: SchemaCaps): boolean {
 function databaseHealth(isDemo: boolean, caps: SchemaCaps): Health {
   if (isDemo) return { state: 'info', label: 'Demo mode' };
   if (!caps.checked) return { state: 'checking', label: 'Checking…' };
-  if (schemaComplete(caps)) return { state: 'ok', label: 'Connected' };
+  if (schemaComplete(caps) && caps.community) return { state: 'ok', label: 'Connected' };
   return { state: 'warning', label: 'Migration needed' };
 }
 
@@ -116,6 +116,7 @@ export function isChecking(h: SystemHealth): boolean {
 }
 
 export const MIGRATION_0002 = 'supabase/migrations/0002_incidents_bolos.sql';
+export const MIGRATION_0007 = 'supabase/migrations/0007_community_report_privacy.sql';
 
 export const ENV_DATABASE: EnvVar[] = [
   { name: 'VITE_SUPABASE_URL', where: 'client' },

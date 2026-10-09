@@ -156,6 +156,15 @@ export interface Incident {
   contactPhone?: string;
   boloId?: string;
   aiSummary?: string;
+  /**
+   * Someone else's community report as a member business gets it (`community_reports`, migration 0007): no
+   * reporter, contact details, transcript, photos or internal fields — those never reach the browser.
+   */
+  limited?: boolean;
+  /** How many photos it has, when `photos` is left out (`limited`). */
+  photoCount?: number;
+  /** How many members marked it as seen, when `seenBy` holds only you (`limited`). */
+  seenCount?: number;
 }
 
 /** What a reporter submits; the context fills in the rest. */

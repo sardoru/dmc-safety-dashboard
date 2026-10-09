@@ -118,7 +118,10 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql) (the wall displays'
   private links: a hash of each key, server-only), then
   [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql) (Invite a list: the
-  paced invitation queue, its settings row and `claim_queued_invites()`, server-only).
+  paced invitation queue, its settings row and `claim_queued_invites()`, server-only), then
+  [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
+  (`community_reports`: other members' community reports without their private fields; `reports`
+  for the reporter and officers only; members read only their own storefront).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -127,7 +130,9 @@ switcher (business / officer / admin), simulated incoming reports, and browser s
 staff workspaces switch on.
 
 The client also **detects the database schema**: until migration `0002` is applied it keeps
-writing reports in the original format, so deploying the new UI before migrating is safe.
+writing reports in the original format, so deploying the new UI before migrating is safe. Likewise
+for `0007`: until it is applied, member businesses read `reports` as before; open dashboards look
+for it every two minutes and switch to `community_reports` by themselves.
 
 ---
 
@@ -141,8 +146,10 @@ writing reports in the original format, so deploying the new UI before migrating
    [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql), then
    [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql), then
    [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql), then
-   [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql)
-   into the SQL editor. `0002`–`0006` are idempotent and keep existing data.
+   [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql), then
+   [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
+   into the SQL editor. `0002`–`0007` are idempotent and keep existing data. On a live project,
+   deploy the app before running `0007` (see [Deploy](#deploy-vercel)).
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 5. **Auth → Hooks → Before User Created** → Postgres function
@@ -208,6 +215,8 @@ npm run lint
 npm run build        # tsc -b && vite build
 npm run test:api     # runs the /api functions against mocked OpenAI, ElevenLabs and Supabase
 npx tsc -p api/tsconfig.json --noEmit
+# who can read which report fields — plain local Postgres, a fresh scratch database (never Supabase):
+dropdb --if-exists dmc_0007_test; createdb dmc_0007_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0007_test -f supabase/tests/0007_community_report_privacy.test.sql
 ```
 
 The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functions together.
@@ -230,6 +239,15 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 `vercel.json` also schedules one cron job — `/api/cron/invites` every 15 minutes, for
 [Inviting a list](#inviting-a-list-paced). Vercel runs crons on the production deployment only, and
 it needs `CRON_SECRET` set there.
+
+**Migration `0007` goes after the deploy.** Deploy the app first (it works with and without
+`0007`), reload any member dashboard that stays open all day (a front-desk screen or tablet — the
+`/tv` wall display is not affected), then run
+[`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql)
+in the Supabase SQL editor. Dashboards on the new app switch over within two minutes; Admin →
+System shows **Private report fields** ✓. A screen still on the previous app keeps its list but
+gets no new alerts from other members until it reloads. Run the other way round, the previous app
+would show members no nearby alerts until the deploy.
 
 ---
 
@@ -422,6 +440,7 @@ scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership 
 scripts/email-previews.ts  every invitation email as HTML + text, to look at without sending
 scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
+supabase/tests/          SQL tests on plain Postgres (0007: who can read which report fields)
 ```
 
 ## Security and privacy
@@ -429,6 +448,20 @@ supabase/migrations/     schema + RLS
 - Roles can't be self-escalated (a Postgres trigger blocks non-admin role changes).
 - Reports can be shared with the community or kept **officers-only**; internal notes are never
   shown to reporters; photos live in a private bucket served by short-lived signed URLs.
+- **Private report fields stay private.** `reports` is readable only by the reporter (their own
+  reports, every field) and by officers and admins. Other member businesses get community reports
+  from `community_reports` — a copy kept in step by triggers, holding only what their screens
+  show: headline, category, priority, status, address and spot, times, the happening-now / weapon
+  / injuries flags, the description, the people and vehicles to look out for (description fields
+  only), the storefront that filed it, the officer working it, and photo and "seen" counts. Never
+  the reporter's account, contact phone or email, transcript, photos, internal fields or who
+  marked it as seen. Members can't write the copies. (On a member's own reports, `acknowledged_by`
+  still lists the account ids of members who marked them as seen; members can't look those ids
+  up.) Tested on Postgres by
+  [`supabase/tests/0007_community_report_privacy.test.sql`](./supabase/tests/0007_community_report_privacy.test.sql)
+  and in `npm run test:api`.
+- A member reads only their **own storefront**; the business directory (contact names, phones,
+  emails) is for officers and admins.
 - The voice interviewer's caller context is read from the database and sanitised; the
   browser can only send an allow-listed set of events on the Live data channel.
 - Text-to-speech, briefing and extraction endpoints require a signed-in user with the right

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Clock,
   Eye,
+  ImageOff,
   Lock,
   MapPin,
   Navigation,
@@ -104,6 +105,9 @@ export default function IncidentDetail({ incident: i, mode, now, onClose }: Inci
   const meta = categoryMeta(i.category);
   const mine = Boolean(userId && i.assignedTo === userId);
   const seen = Boolean(userId && i.seenBy.includes(userId));
+  // Other members' reports (`limited`) carry counts: who saw it and the photos stay private.
+  const seenCount = i.seenCount ?? i.seenBy.length;
+  const photoCount = i.photoCount ?? i.photos.length;
   const directions = `https://www.google.com/maps/dir/?api=1&destination=${i.lat},${i.lng}`;
 
   return (
@@ -218,7 +222,7 @@ export default function IncidentDetail({ incident: i, mode, now, onClose }: Inci
             <Button size="sm" variant={seen ? 'subtle' : 'secondary'} icon={<Eye className="h-4 w-4" />} disabled={seen} onClick={() => void markSeen(i.id)}>
               {seen ? 'Marked as seen' : 'Mark as seen'}
             </Button>
-            {i.seenBy.length > 0 && <span className="text-[12px] text-muted">{i.seenBy.length} nearby {i.seenBy.length === 1 ? 'business has' : 'businesses have'} seen this</span>}
+            {seenCount > 0 && <span className="text-[12px] text-muted">{seenCount} nearby {seenCount === 1 ? 'business has' : 'businesses have'} seen this</span>}
           </div>
         )}
 
@@ -267,10 +271,18 @@ export default function IncidentDetail({ incident: i, mode, now, onClose }: Inci
           </Section>
         )}
 
-        {i.photos.length > 0 && (
+        {i.photos.length > 0 ? (
           <Section title={`Photos · ${i.photos.length}`}>
             <PhotoGallery refs={i.photos} />
           </Section>
+        ) : (
+          photoCount > 0 && (
+            <Section title={`Photos · ${photoCount}`}>
+              <p className="flex items-center gap-2 text-[13px] text-muted">
+                <ImageOff className="h-4 w-4" /> Photos are only visible to officers and the reporter.
+              </p>
+            </Section>
+          )
         )}
 
         {officer && (

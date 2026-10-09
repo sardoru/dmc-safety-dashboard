@@ -6,6 +6,7 @@
  *   npm run test:api
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { invitationEmail, type InvitationOptions } from '../api/_lib/invitations.ts';
@@ -13,6 +14,14 @@ import { chapterUrl, clock, FILMS, type Film } from '../api/_lib/films.ts';
 import { FILM as HOW_IT_WORKS_FILM } from '../src/film/filmData.ts';
 import { FILM as HOW_TO_REPORT_FILM } from '../src/film/reportFilmData.ts';
 import { FILM as HOW_TO_JOIN_FILM } from '../src/film/joinFilmData.ts';
+import {
+  COMMUNITY_REPORT_COLUMNS,
+  communityRowToIncident,
+  rowToIncident,
+  type CommunityReportRow,
+  type ReportRow,
+} from '../src/lib/incidentRows.ts';
+import { applyFeedChange, mergeFeeds } from '../src/lib/feed.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -1062,6 +1071,14 @@ async function main() {
   check('officers-only reports are marked', r.data.reports?.[1]?.officersOnly === true && r.data.reports?.[0]?.officersOnly === false);
   check('counts: new, open, P1–P2 open, last 24 h, lookouts', JSON.stringify(r.data.counts) === JSON.stringify({ new: 1, open: 2, urgent: 2, last24h: 2, lookouts: 2 }), r.data.counts);
   check('never a description, phone, business, reporter, photo, transcript or subject', !/PRIVATE-/.test(feedText), feedText.match(/PRIVATE-[A-Z]+/g));
+  const displayReads = calls.filter((c) => c.url.startsWith('https://fake.supabase.co/rest/v1/reports'));
+  const displayColumns = new Set(displayReads.flatMap((c) => (new URL(c.url).searchParams.get('select') ?? '').split(',').map((s) => s.trim())));
+  check(
+    '…and never asks the database for them: no *, reporter, contact, transcript, photos, people or internal fields',
+    displayReads.length === 2 &&
+      !['*', 'reporter_id', 'contact_phone', 'contact_ok', 'transcript', 'photos', 'business_id', 'business_name', 'subjects', 'vehicles', 'acknowledged_by', 'assigned_to', 'assigned_name', 'ai_summary', 'bolo_id'].some((c) => displayColumns.has(c)),
+    [...displayColumns],
+  );
   check('last seen recorded (stale display)', calls.some((c) => c.method === 'PATCH' && c.url.startsWith('https://fake.supabase.co/rest/v1/display_links') && !!(c.body as { last_seen_at?: string })?.last_seen_at));
   displayRow = { ...displayRow, last_seen_at: ago(0.5) };
   calls.length = 0;
@@ -1094,6 +1111,138 @@ async function main() {
   check('41st request in a minute from one address → 429', lastStatus === 429, lastStatus);
 
   await inviteListChecks({ membershipUpstream, links, mails });
+
+  // ---------------------------------------------------------------- Private report fields (migration 0007)
+  // Member businesses read other members' community reports from community_reports, never from reports. The SQL
+  // itself is tested on Postgres (supabase/tests/0007_community_report_privacy.test.sql); this checks the client's
+  // side of the contract and how the list a member sees is put together.
+  console.log('private report fields (migration 0007)');
+  const MIGRATION_0007 = readFileSync(resolve(ROOT, 'supabase/migrations/0007_community_report_privacy.sql'), 'utf8');
+  const tableSql = MIGRATION_0007.match(/create table if not exists public\.community_reports \(([\s\S]*?)\n\);/)?.[1] ?? '';
+  const tableColumns = tableSql
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/)[0])
+    .filter((word) => /^[a-z_]+$/.test(word));
+  check(
+    'the dashboard reads exactly the columns 0007 creates, in order',
+    tableColumns.length > 0 && JSON.stringify(tableColumns) === JSON.stringify(COMMUNITY_REPORT_COLUMNS),
+    { tableColumns, client: COMMUNITY_REPORT_COLUMNS },
+  );
+  const PRIVATE_COLUMNS = ['reporter_id', 'contact_phone', 'contact_ok', 'transcript', 'photos', 'business_id', 'acknowledged_by', 'assigned_to', 'ai_summary', 'bolo_id', 'email', 'phone'];
+  check('…none of them private (reporter, contact, transcript, photos, who saw it, internal fields)', !PRIVATE_COLUMNS.some((c) => tableColumns.includes(c)), tableColumns);
+  const syncColumns = (MIGRATION_0007.match(/insert into public\.community_reports as c \(([^)]*)\)/)?.[1] ?? '').split(',').map((s) => s.trim());
+  check('the sync trigger writes every column of the copy', JSON.stringify(syncColumns) === JSON.stringify(tableColumns), syncColumns);
+  const reportsSelect = [...MIGRATION_0007.matchAll(/create policy reports_select on public\.reports\s+for select to authenticated\s+using \(([^;]*)\);/g)].at(-1)?.[1];
+  check('reports_select is the reporter and officers only', reportsSelect === 'reporter_id = auth.uid() or public.is_officer()', reportsSelect);
+
+  const ME = USERS['tok-biz'].id;
+  const reportedAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const copyRow: CommunityReportRow = {
+    id: 'abcd1234-0000-0000-0000-000000000009', created_at: reportedAgo(5), updated_at: reportedAgo(2), occurred_at: reportedAgo(6),
+    source: 'business', kind: 'voice', incident_type: 'Suspicious Person', priority: 2, status: 'acknowledged', title: null,
+    description: 'A man in a gray hoodie is trying car door handles. He went north.', address: '254 S Main St, Memphis, TN 38103',
+    location_note: 'Lot behind the market', lat: 35.1381, lng: -90.0544, happening_now: true, weapons_seen: false, injuries: false,
+    visibility: 'community', subjects: [{ id: 's1', clothingTop: 'Gray hoodie' }], vehicles: [], business_name: 'Ortega’s Corner Market',
+    assigned_name: 'Officer Hayes', photo_count: 2, seen_count: 3,
+  };
+  const copy = communityRowToIncident(copyRow, null);
+  check(
+    'a copy is marked limited: no reporter, contact, transcript, photos or internal fields',
+    copy.limited === true && copy.reporterId === undefined && copy.contactPhone === undefined && copy.transcript === undefined &&
+      copy.photos.length === 0 && copy.businessId === undefined && copy.assignedTo === undefined && copy.aiSummary === undefined && copy.boloId === undefined,
+    copy,
+  );
+  check(
+    '…and keeps what members see: headline, storefront, officer, place, flags, people, photo and seen counts',
+    copy.title === 'A man in a gray hoodie is trying car door handles' && copy.reporterName === 'Ortega’s Corner Market' &&
+      copy.assignedName === 'Officer Hayes' && copy.locationNote === 'Lot behind the market' && copy.happeningNow &&
+      copy.subjects[0]?.clothingTop === 'Gray hoodie' && copy.photoCount === 2 && copy.seenCount === 3 && copy.seenBy.length === 0 &&
+      copy.visibility === 'community' && copy.status === 'acknowledged' && copy.priority === 2,
+    copy,
+  );
+  const seenCopy = communityRowToIncident({ ...copyRow, seen_count: 0 }, ME);
+  check('seen by you: seenBy holds only you, and the count is at least 1', seenCopy.seenBy.join() === ME && seenCopy.seenCount === 1, seenCopy);
+  check(
+    'no storefront → "Downtown business"; an officer’s report → "Public Safety"',
+    communityRowToIncident({ ...copyRow, business_name: null }, null).reporterName === 'Downtown business' &&
+      communityRowToIncident({ ...copyRow, source: 'officer', business_name: null }, null).reporterName === 'Public Safety',
+  );
+
+  const ownRow: ReportRow = {
+    id: copyRow.id, reporter_id: ME, source: 'business', kind: 'voice', incident_type: 'Suspicious Person', description: copyRow.description ?? '',
+    transcript: 'my own words', business_id: '55555555-5555-5555-5555-555555555555', business_name: 'Ortega’s Corner Market', address: copyRow.address,
+    lat: copyRow.lat, lng: copyRow.lng, status: 'active', acknowledged_by: [], created_at: copyRow.created_at, contact_phone: '901-555-0101', visibility: 'community',
+  };
+  const own = rowToIncident(ownRow);
+  const copyOfOwn = communityRowToIncident({ ...copyRow, status: 'active' }, null);
+  // A brand-new report's copy: written in the transaction that filed it, so both timestamps match.
+  const filedNow = reportedAgo(1);
+  const other = communityRowToIncident({ ...copyRow, id: 'beef0000-0000-0000-0000-000000000010', created_at: filedNow, updated_at: filedNow, title: 'Window smashed' }, null);
+  const merged = mergeFeeds([own], [copyOfOwn, other]);
+  check(
+    'first load: your own report in full wins over its copy; other reports come in as copies, newest first',
+    merged.length === 2 && merged[0] === other && merged[1] === own && merged[1].transcript === 'my own words',
+    merged.map((i) => [i.id, i.limited]),
+  );
+  let step = applyFeedChange([], { from: 'community', type: 'INSERT', incident: other }, ME);
+  check(
+    'a new copy → added and announced as someone else’s (the nearby alert)',
+    step.list.length === 1 && step.event?.type === 'created' && step.event.incident.reporterId === undefined,
+    step,
+  );
+  const sharedLater = communityRowToIncident({ ...copyRow, id: 'beef0000-0000-0000-0000-000000000011', created_at: reportedAgo(180), updated_at: reportedAgo(0), status: 'resolved' }, null);
+  step = applyFeedChange([own], { from: 'community', type: 'INSERT', incident: sharedLater }, ME);
+  check(
+    'a copy of an older report (shared later, or restored by re-running 0007) joins quietly: an update, not an alert',
+    step.list.length === 2 && step.event?.type === 'updated' && step.event.previous === undefined,
+    step,
+  );
+  step = applyFeedChange([], { from: 'reports', type: 'INSERT', incident: own }, ME);
+  const ownFirst = step;
+  step = applyFeedChange(ownFirst.list, { from: 'community', type: 'INSERT', incident: copyOfOwn }, ME);
+  check(
+    'your own new report, then its copy: one alert (yours), the copy changes nothing',
+    ownFirst.event?.type === 'created' && ownFirst.event.incident.reporterId === ME && step.list === ownFirst.list && !step.event,
+    step,
+  );
+  step = applyFeedChange([copyOfOwn], { from: 'reports', type: 'INSERT', incident: own }, ME);
+  check('…and if the copy came first, the full row replaces it with no second alert', step.list.length === 1 && step.list[0] === own && !step.event, step);
+  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: { ...copyOfOwn, status: 'responding' } }, ME);
+  check('a copy’s update never overwrites your own full report', step.list[0] === own && !step.event, step);
+  step = applyFeedChange([own], { from: 'community', type: 'DELETE', id: own.id }, ME);
+  check('…nor does its delete (made officers-only) remove it', step.list.length === 1 && step.list[0] === own, step);
+  step = applyFeedChange([other, own], { from: 'community', type: 'DELETE', id: other.id }, ME);
+  check('a copy that goes away (deleted, or officers-only now) leaves the list', step.list.length === 1 && step.list[0] === own, step);
+  const responding = { ...other, status: 'responding' as const };
+  step = applyFeedChange([other], { from: 'community', type: 'UPDATE', incident: responding }, ME);
+  check(
+    'a copy’s update replaces it and is passed on as an update (no new alert)',
+    step.list[0] === responding && step.event?.type === 'updated' && step.event.previous === other,
+    step,
+  );
+  step = applyFeedChange([own], { from: 'community', type: 'UPDATE', incident: other }, ME);
+  check(
+    'an update for a report not loaded yet adds it quietly (an update, not an alert)',
+    step.list.length === 2 && step.event?.type === 'updated' && step.event.previous === undefined,
+    step,
+  );
+  // An open dashboard that switched over when 0007 landed still holds other members' full rows from before.
+  const staleFull = rowToIncident({ ...ownRow, id: other.id, reporter_id: '99999999-9999-9999-9999-999999999999' });
+  const staleUpdated = applyFeedChange([staleFull, own], { from: 'community', type: 'UPDATE', incident: responding }, ME);
+  const staleGone = applyFeedChange([staleFull, own], { from: 'community', type: 'DELETE', id: other.id }, ME);
+  check(
+    'after switching over, a copy replaces or removes someone else’s full row left from before 0007',
+    staleUpdated.list[0] === responding && staleUpdated.list[0].limited === true && staleGone.list.length === 1 && staleGone.list[0] === own,
+    { staleUpdated: staleUpdated.list.map((i) => [i.id, i.limited]), staleGone: staleGone.list.map((i) => i.id) },
+  );
+  step = applyFeedChange([own], { from: 'reports', type: 'INSERT', incident: own }, ME);
+  const staffInsert = step;
+  step = applyFeedChange([own], { from: 'reports', type: 'DELETE', id: own.id }, ME);
+  check(
+    'officers’ feed unchanged: a known insert is ignored, a delete removes',
+    staffInsert.list.length === 1 && !staffInsert.event && step.list.length === 0,
+    { staffInsert, step },
+  );
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

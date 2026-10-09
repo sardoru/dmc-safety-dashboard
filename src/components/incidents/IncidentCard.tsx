@@ -17,6 +17,8 @@ interface IncidentCardProps {
 
 export default function IncidentCard({ incident: i, now, selected, onClick, reporterView, distance, compact }: IncidentCardProps) {
   const fresh = i.status === 'active' && now - i.createdAt < 10 * 60_000;
+  // Other members' reports carry a count, not the photos.
+  const photoCount = i.photoCount ?? i.photos.length;
   return (
     <button
       type="button"
@@ -52,7 +54,7 @@ export default function IncidentCard({ incident: i, now, selected, onClick, repo
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <StatusPill status={i.status} reporterView={reporterView} />
             <FlagTags incident={i} />
-            {!compact && (i.subjects.length > 0 || i.vehicles.length > 0 || i.photos.length > 0) && (
+            {!compact && (i.subjects.length > 0 || i.vehicles.length > 0 || photoCount > 0) && (
               <span className="ml-auto inline-flex items-center gap-2 text-[11px] text-subtle">
                 {i.subjects.length > 0 && (
                   <span className="inline-flex items-center gap-0.5" title={`${i.subjects.length} described`}>
@@ -66,10 +68,10 @@ export default function IncidentCard({ incident: i, now, selected, onClick, repo
                     {i.vehicles.length}
                   </span>
                 )}
-                {i.photos.length > 0 && (
+                {photoCount > 0 && (
                   <span className="inline-flex items-center gap-0.5" title="Photos">
                     <ImageIcon className="h-3.5 w-3.5" />
-                    {i.photos.length}
+                    {photoCount}
                   </span>
                 )}
               </span>
