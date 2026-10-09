@@ -12,6 +12,7 @@ export default defineConfig({
         main: 'index.html',
         film: 'how-it-works.html',
         reportFilm: 'how-to-report.html',
+        joinFilm: 'how-to-join.html',
         join: 'join.html',
         live: 'live.html',
       },

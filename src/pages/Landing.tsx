@@ -25,7 +25,7 @@ import { useNow } from '../hooks/useNow';
 import type { Role } from '../types';
 import { isOpen } from '../lib/taxonomy';
 import { cn } from '../lib/format';
-import { FILM_DURATION, REPORT_FILM_DURATION } from '../film/filmMeta';
+import { FILM_DURATION, JOIN_FILM_DURATION, REPORT_FILM_DURATION } from '../film/filmMeta';
 import { formatTime } from '../film/time';
 import Logo, { LogoMark } from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
@@ -187,6 +187,11 @@ export default function Landing() {
                   <CirclePlay className="h-5 w-5" /> How to report · {formatTime(REPORT_FILM_DURATION)}
                 </a>
               )}
+              {JOIN_FILM_DURATION > 0 && (
+                <a href="/how-to-join" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                  <CirclePlay className="h-5 w-5" /> How to join · {formatTime(JOIN_FILM_DURATION)}
+                </a>
+              )}
               <Link to="/live" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
                 <MapPinned className="h-5 w-5" /> See the live map
               </Link>
@@ -258,7 +263,7 @@ export default function Landing() {
                 both — when your hands are full or you’re on patrol.
               </p>
               <div className="relative mt-8 hidden overflow-hidden rounded-3xl border border-line lg:block">
-                <BrandImage name="mainStreet" width={640} alt="Main Street at night with the trolley" className="h-72 w-full object-cover" fallback={<div className="h-72 bg-brand-night" />} />
+                <BrandImage name="mainStreet" width={640} alt="Main Street at night: the trolley under the Orpheum sign" className="h-72 w-full object-cover object-[50%_24%]" fallback={<div className="h-72 bg-brand-night" />} />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -384,6 +389,13 @@ export default function Landing() {
                   <li>
                     <a href="/how-to-report" className="hover:text-ink">
                       How to report · {formatTime(REPORT_FILM_DURATION)}
+                    </a>
+                  </li>
+                )}
+                {JOIN_FILM_DURATION > 0 && (
+                  <li>
+                    <a href="/how-to-join" className="hover:text-ink">
+                      How to join · {formatTime(JOIN_FILM_DURATION)}
                     </a>
                   </li>
                 )}

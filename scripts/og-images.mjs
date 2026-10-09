@@ -4,6 +4,7 @@
  *   public/og-image.png        — the site
  *   public/video/og-image.png  — the "How it works" film page
  *   public/video/how-to-report/og-image.png — the "How to report" film page
+ *   public/video/how-to-join/og-image.png — the "How to join" film page
  *   public/og/join.png         — /join (access codes)
  *   public/og/live.png         — /live (the public map)
  *
@@ -42,6 +43,7 @@ const filmMeta = readFileSync(join(ROOT, 'src', 'film', 'filmMeta.ts'), 'utf8');
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const filmLength = clock(Number(filmMeta.match(/\bFILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 const reportFilmLength = clock(Number(filmMeta.match(/\bREPORT_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
+const joinFilmLength = clock(Number(filmMeta.match(/\bJOIN_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 
 const qr = (url) =>
   QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#0b1222', light: '#ffffff' } });
@@ -121,6 +123,15 @@ const cards = [
       <p class="lede">By voice, with the guided form, or with a quick alert — and how officers respond.</p>
       <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${reportFilmLength}</div>
       ${sos}${scan(await qr(`${SITE}/how-to-report`), `${SITE_SHORT}/how-to-report`)}`),
+  },
+  {
+    out: join(ROOT, 'public', 'video', 'how-to-join', 'og-image.png'),
+    html: page(`${brand}
+      <div class="eyebrow">How to join · film · ${joinFilmLength}</div>
+      <h1>How to join<br><em>and take part</em></h1>
+      <p class="lede">Register your business with only an email, or join with an access code — then take part.</p>
+      <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${joinFilmLength}</div>
+      ${sos}${scan(await qr(`${SITE}/how-to-join`), `${SITE_SHORT}/how-to-join`)}`),
   },
   {
     out: join(ROOT, 'public', 'og', 'join.png'),

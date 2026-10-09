@@ -2,3 +2,4 @@
 // link to a film don't bundle its transcript. 0 = no film yet.
 export const FILM_DURATION = 353.3;
 export const REPORT_FILM_DURATION = 188.5;
+export const JOIN_FILM_DURATION = 188;

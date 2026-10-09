@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, CircleCheck, KeyRound, Mail, Send, ShieldCheck, Ticket, UserCog } from 'lucide-react';
+import { ArrowLeft, Building2, CircleCheck, CirclePlay, KeyRound, Mail, Send, ShieldCheck, Ticket, UserCog } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { loginWithPasskey, passkeysSupported } from '../lib/passkeys';
@@ -10,6 +10,8 @@ import { Button } from '../components/ui/Button';
 import { Banner } from '../components/ui/Feedback';
 import { homePathFor } from '../components/layout/nav';
 import type { Role } from '../types';
+import { JOIN_FILM_DURATION } from '../film/filmMeta';
+import { formatTime } from '../film/time';
 
 export default function LoginPage() {
   const { session, sendMagicLink, isDemo, setDemoRole, role } = useAuth();
@@ -204,6 +206,15 @@ export default function LoginPage() {
                   <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />
                   Public-safety officers: use the email your administrator invited.
                 </p>
+                {JOIN_FILM_DURATION > 0 && (
+                  <p className="flex gap-2.5">
+                    <CirclePlay className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />
+                    {/* A plain link: the film is its own page (how-to-join.html), not a route of this app. */}
+                    <a href="/how-to-join" className="font-semibold text-accent-strong hover:underline">
+                      New here? Watch how to join · {formatTime(JOIN_FILM_DURATION)}
+                    </a>
+                  </p>
+                )}
               </div>
             </>
           )}

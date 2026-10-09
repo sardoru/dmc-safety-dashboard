@@ -3,7 +3,7 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [0.4.4] — 2026-10-09 — Role-specific invitation emails
+## [0.4.5] — 2026-10-09 — Role-specific invitation emails
 
 ### Added
 - **Invitation emails written for the role.** Member businesses, Public Safety officers and
@@ -63,6 +63,29 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   Supabase-sent invitations from the profile, a stale invite, the open invite or nothing; the film
   list matches the film pages).
 - Screenshots of all 15 variants at 600 px and 375 px, plus desktop, dark mode and images off.
+
+## [0.4.4] — 2026-10-09 — "How to join" film, the sample report on South Main, a new Main Street picture
+
+### Added
+- **https://www.901safety.com/how-to-join** — a 3:08 how-to for Downtown businesses and local
+  stakeholders, in light mode, 3Blue1Brown style, narrated in Eleven v4 to ASD-STE100: who can
+  join, register a business with only an email, join with an access code, set up the storefront
+  and a passkey, take part every day (nearby alerts, your block, spoken alerts, my reports), the
+  Lookout board and a sighting, and the public live map. Eight chapters, a transcript, captions,
+  `?t=` deep links, VideoObject JSON-LD and its own share card.
+- Links to it: the landing page's hero and footer ("How to join · 3:08"), the sign-in page ("New
+  here? Watch how to join") and `/join`. Like the other films' links, they show only once the
+  film's length is set.
+
+### Changed
+- **The sample report is on South Main.** Report DT-0119 is now "Man trying car door handles on S
+  Main St", from Ortega's Corner Market, 254 S Main St (it was on S 2nd St, from Gayoso Corner
+  Market), heading north toward Beale St; the guided form's example text follows. Both published
+  films were re-cut with it: "How it works" (5:53) and "How to report" (3:08), whose caller line
+  and real voice call were redone.
+- **A new Main Street picture** — the trolley under the Orpheum sign, supplied by the owner —
+  replaces the old trolley picture on the sign-in and join pages and in the landing page's "Built
+  for downtown" card (also in PR #10).
 
 ## [0.4.3] — 2026-10-09 — Wall display for the office TV
 

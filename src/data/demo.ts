@@ -14,7 +14,7 @@ export const DEMO_BUSINESSES: Business[] = [
   { id: 'biz-cottonrow', name: 'Cotton Row Hotel', address: '125 Union Ave', type: 'hotel', contactName: 'Priya Natarajan', phone: '(901) 555-0110', email: 'security@cottonrow.example', lat: 35.1461, lng: -90.0511 },
   { id: 'biz-courtsq', name: 'Court Square Books', address: '62 N Main St', type: 'retail', contactName: 'Ellen Park', phone: '(901) 555-0163', email: 'hello@courtsquarebooks.example', lat: 35.1479, lng: -90.0516 },
   { id: 'biz-southmain', name: 'South Main Gallery', address: '410 S Main St', type: 'retail', contactName: 'Theo Grant', phone: '(901) 555-0128', email: 'theo@southmaingallery.example', lat: 35.1361, lng: -90.0566 },
-  { id: 'biz-gayoso', name: 'Gayoso Corner Market', address: '99 S 2nd St', type: 'retail', contactName: 'Luis Ortega', phone: '(901) 555-0195', email: 'luis@gayosomarket.example', lat: 35.1441, lng: -90.0504 },
+  { id: 'biz-ortega', name: "Ortega's Corner Market", address: '254 S Main St', type: 'retail', contactName: 'Luis Ortega', phone: '(901) 555-0195', email: 'luis@ortegasmarket.example', lat: 35.1391, lng: -90.0555 },
   { id: 'biz-frontdeli', name: 'Front Street Deli & Co.', address: '77 S Front St', type: 'restaurant', contactName: 'Hannah Brooks', phone: '(901) 555-0151', email: 'orders@frontstreetdeli.example', lat: 35.1446, lng: -90.0537 },
   { id: 'biz-peabodygarage', name: 'Peabody Place Parking', address: '150 Peabody Pl', type: 'service', contactName: 'Andre Collins', phone: '(901) 555-0177', email: 'andre@ppparking.example', lat: 35.1424, lng: -90.0503 },
   { id: 'biz-madisondiner', name: 'Madison Avenue Diner', address: '33 Madison Ave', type: 'restaurant', contactName: 'Rosa Jimenez', phone: '(901) 555-0136', email: 'rosa@madisondiner.example', lat: 35.1468, lng: -90.0531 },
@@ -96,10 +96,10 @@ interface Seed {
 
 const SEEDS: Seed[] = [
   {
-    id: 'demo-inc-01', biz: 'biz-gayoso', cat: 'suspicious_person', p: 2, status: 'active', minsAgo: 4, kind: 'voice', now: true,
-    title: 'Man trying car door handles on S 2nd St',
-    description: 'Staff watched a man walk along parked cars on S 2nd St pulling on door handles, about six cars so far. Still on the block when they called.',
-    subjects: [{ ageRange: '20s', sex: 'male', height: "about 5'10\"", build: 'thin', hair: 'black beanie', clothingTop: 'gray hoodie, red letters on back', clothingBottom: 'black joggers', footwear: 'white sneakers', behavior: 'pulling car door handles one by one', direction: 'south toward Peabody Pl' }],
+    id: 'demo-inc-01', biz: 'biz-ortega', cat: 'suspicious_person', p: 2, status: 'active', minsAgo: 4, kind: 'voice', now: true,
+    title: 'Man trying car door handles on S Main St',
+    description: 'Staff watched a man walk along parked cars on S Main St pulling on door handles, about six cars so far. Still on the block when they called.',
+    subjects: [{ ageRange: '20s', sex: 'male', height: "about 5'10\"", build: 'thin', hair: 'black beanie', clothingTop: 'gray hoodie, red letters on back', clothingBottom: 'black joggers', footwear: 'white sneakers', behavior: 'pulling car door handles one by one', direction: 'north toward Beale St' }],
   },
   {
     id: 'demo-inc-02', biz: 'biz-southmain', cat: 'theft', p: 3, status: 'acknowledged', minsAgo: 22, kind: 'form', ackAfter: 6, assigned: 1,

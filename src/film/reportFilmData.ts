@@ -71,30 +71,30 @@ export const FILM: FilmData = {
           "speaker": "caller"
         },
         {
-          "text": "A man is pulling on car door handles on South Second Street, right now.",
-          "start": 37.79,
+          "text": "A man is pulling on car door handles on South Main Street, right now.",
+          "start": 37.87,
           "speaker": "caller"
         },
         {
           "text": "Is anyone hurt, and did you see a weapon?",
-          "start": 42.48,
+          "start": 42.56,
           "speaker": "interviewer"
         },
         {
           "text": "Answer in your own words.",
-          "start": 46.09
+          "start": 46.17
         },
         {
           "text": "It asks one short question at a time, and you can interrupt it.",
-          "start": 48.41
+          "start": 48.49
         },
         {
           "text": "When it has the facts, it fills in the report on your screen.",
-          "start": 52.97
+          "start": 53.05
         },
         {
           "text": "Then select Review and submit.",
-          "start": 57.29
+          "start": 57.37
         }
       ]
     },

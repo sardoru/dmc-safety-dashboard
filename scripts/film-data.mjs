@@ -2,7 +2,7 @@
 /**
  * Bring one of the site's films into the site.
  *
- *   node scripts/film-data.mjs <film renders dir> [upload date YYYY-MM-DD] [--film how-it-works|how-to-report]
+ *   node scripts/film-data.mjs <film renders dir> [upload date YYYY-MM-DD] [--film how-it-works|how-to-report|how-to-join]
  *
  * Reads <dir>/chapters.json (from the film project's web-assets step), copies
  * the web encode, poster and captions into the film's public/video folder,
@@ -39,6 +39,17 @@ const FILMS = {
     name: 'How to report an incident',
     description:
       'How to report an incident on the Core Downtown Memphis Safety Dashboard — by voice, with the guided form, or with a quick alert — and how Downtown public-safety officers respond.',
+  },
+  'how-to-join': {
+    html: 'how-to-join.html',
+    folder: 'video/how-to-join',
+    video: 'dmc-safety-how-to-join.mp4',
+    web: 'dmc-safety-how-to-join-web.mp4',
+    module: 'joinFilmData.ts',
+    meta: 'JOIN_FILM_DURATION',
+    name: 'How to join and take part',
+    description:
+      'How Downtown Memphis businesses and local stakeholders join the Core Downtown Memphis Safety Dashboard — register with an email or an access code, set up a storefront — and how to take part: nearby alerts, the Lookout board and the public live map.',
   },
 };
 
