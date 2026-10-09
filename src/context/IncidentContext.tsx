@@ -269,7 +269,8 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
         // A failed read keeps what is on screen rather than showing "all clear".
         if (own.error) throw own.error;
         if (shared.error) throw shared.error;
-        if (!seen.error && Array.isArray(seen.data)) seenRef.current = new Set(seen.data as string[]);
+        // Merged, not replaced: a mark made while this was loading stays.
+        if (!seen.error && Array.isArray(seen.data)) for (const id of seen.data as string[]) seenRef.current.add(id);
         const seenNow = seenRef.current;
         setIncidents(
           mergeFeeds(
