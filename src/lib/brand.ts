@@ -1,6 +1,7 @@
 /**
  * Brand imagery. The skyline is a photograph of Downtown Memphis supplied by
- * the owner (public/brand/memphis-skyline.jpg; keep its credit mark). The
+ * the owner (public/brand/memphis-skyline.jpg; keep its credit mark), and so is
+ * the Main Street picture (public/brand/main-street-orpheum.jpg). The
  * illustrations were generated with Higgsfield and live on its CDN.
  *
  * In production every image is served through Vercel's Image Optimization API
@@ -16,8 +17,8 @@ export const BRAND_IMAGES = {
   skyline: SKYLINE,
   /** The same photo where a wide river-city panorama is shown. */
   panorama: SKYLINE,
-  /** Main Street at night with the trolley (4:5). */
-  mainStreet: { src: `${CDN}/hf_20261008_170524_b6fd1703-b51e-4a46-9815-9e740b822e31.png`, width: 1792, height: 2240 },
+  /** Main Street at night: the trolley under the Orpheum sign (4:5; supplied by the owner, 2026-10-09). */
+  mainStreet: { src: '/brand/main-street-orpheum.jpg', width: 1122, height: 1402 },
   /** Shop owner reporting by phone. */
   illoReport: { src: `${CDN}/hf_20261008_170523_1eba0bdd-f4ef-42eb-b395-120bdb0b6e38.png`, width: 1024, height: 1024 },
   /** Officer monitoring the map. */
