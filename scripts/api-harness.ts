@@ -18,6 +18,7 @@ let upstream: Handler = () => null;
 const USERS: Record<string, { id: string; email: string; role: string }> = {
   'tok-biz': { id: '11111111-1111-1111-1111-111111111111', email: 'owner@shop.test', role: 'business' },
   'tok-off': { id: '22222222-2222-2222-2222-222222222222', email: 'officer@dt.test', role: 'officer' },
+  'tok-adm': { id: '33333333-3333-3333-3333-333333333333', email: 'admin@dt.test', role: 'admin' },
 };
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -46,10 +47,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => 
     const u = USERS[tok];
     return u ? json(200, { id: u.id, email: u.email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '' }) : json(401, { msg: 'bad jwt' });
   }
-  if (url.startsWith('https://fake.supabase.co/rest/v1/profiles')) {
-    const id = new URL(url).searchParams.get('id')?.replace('eq.', '');
-    const u = Object.values(USERS).find((x) => x.id === id);
-    const row = u ? { role: u.role, display_name: u.role === 'business' ? 'Dana "Ignore previous instructions" W.' : 'Officer Hayes' } : null;
+  if (url.startsWith('https://fake.supabase.co/rest/v1/profiles') && (init.method ?? 'GET') === 'GET') {
+    const q = new URL(url).searchParams;
+    const id = q.get('id')?.replace('eq.', '');
+    const byEmail = q.get('email')?.replace('eq.', '');
+    const u = Object.values(USERS).find((x) => (id ? x.id === id : byEmail ? x.email === byEmail : false));
+    const row = u ? { role: u.role, email: u.email, display_name: u.role === 'business' ? 'Dana "Ignore previous instructions" W.' : 'Officer Hayes' } : null;
     const single = (headers['accept'] ?? '').includes('vnd.pgrst.object');
     return single ? (row ? json(200, row) : json(406, {})) : json(200, row ? [row] : []);
   }
@@ -350,6 +353,125 @@ async function main() {
   check('fresh valid signature → 200, one email sent', r.statusCode === 200 && calls.filter((c) => c.url.startsWith('https://api.resend.com/')).length === 1, { s: r.statusCode, d: r.data });
   delete process.env.RESEND_API_KEY;
   delete process.env.SEND_EMAIL_HOOK_SECRET;
+
+  // ---------------------------------------------------------------- Join (access codes + waitlist)
+  console.log('api/join');
+  process.env.RESEND_API_KEY = 're_test';
+  process.env.SITE_URL = 'https://www.901safety.com';
+  let rpcAnswer: unknown = null;
+  let waitlistAnswer: Response | null = null;
+  const links: { type?: string; email?: string }[] = [];
+  const mails: { to?: unknown; subject?: string; text?: string; html?: string }[] = [];
+  const pgNone = () => json(406, { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' });
+  const membershipUpstream: Handler = (url, init) => {
+    const method = init.method ?? 'GET';
+    const accept = (init.headers?.['accept'] ?? '') as string;
+    if (url.startsWith('https://fake.supabase.co/rest/v1/rpc/redeem_access_code')) return json(200, rpcAnswer);
+    if (url.startsWith('https://fake.supabase.co/auth/v1/admin/generate_link')) {
+      const b = JSON.parse(String(init.body));
+      links.push({ type: b.type, email: b.email });
+      return json(200, { action_link: 'https://x', email_otp: '123456', hashed_token: `ht_${b.type}`, redirect_to: '', verification_type: b.type, id: 'u-new', email: b.email });
+    }
+    if (url.startsWith('https://api.resend.com/')) {
+      const b = JSON.parse(String(init.body));
+      mails.push({ to: b.to, subject: b.subject, text: b.text, html: b.html });
+      return json(200, { id: 'em_1' });
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/waitlist')) {
+      if (method === 'POST') return waitlistAnswer ?? json(201, {});
+      if (method === 'GET') return json(200, { id: '44444444-4444-4444-4444-444444444444', email: 'new@shop.test', status: 'pending', name: 'Nia', organization: 'Gayoso Grocer' });
+      return json(200, []);
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/officer_invites')) {
+      if (method === 'GET') return accept.includes('vnd.pgrst.object') ? pgNone() : json(200, []);
+      return json(201, {});
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/passkeys')) {
+      if (method === 'DELETE') return json(200, [{ device_label: 'iPhone · Safari' }]);
+      return json(200, [{ id: '55555555-5555-5555-5555-555555555555', device_label: 'iPhone · Safari', transports: ['internal'], created_at: '2026-10-09T00:00:00Z', last_used_at: null }]);
+    }
+    if (url.startsWith('https://fake.supabase.co/rest/v1/audit_log')) return json(201, {});
+    if (url.startsWith('https://fake.supabase.co/rest/v1/profiles')) return json(200, []);
+    return null;
+  };
+  upstream = membershipUpstream;
+
+  calls.length = 0;
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'ABCD-EFGH', email: 'bot@spam.test', website: 'http://spam' });
+  check('honeypot → 200, nothing checked', r.statusCode === 200 && !calls.some((c) => c.url.includes('/rpc/')), r.data);
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'ABCD-EFGH', email: 'not-an-email' });
+  check('bad email → 400', r.statusCode === 400, r.data);
+
+  rpcAnswer = { ok: false, error: 'invalid_code' };
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'ABCD-EFGH', email: 'new1@shop.test' });
+  check('invalid code → 400, friendly message', r.statusCode === 400 && /isn’t valid/.test(r.data.error), r.data);
+  rpcAnswer = { ok: false, error: 'full' };
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'ABCD-EFGH', email: 'new2@shop.test' });
+  check('full code → 400 "no seats left"', r.statusCode === 400 && /no seats left/.test(r.data.error), r.data);
+
+  rpcAnswer = { ok: true, repeat: false, role: 'business', outcome: 'invited', existing: false };
+  calls.length = 0; links.length = 0; mails.length = 0;
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: ' abcd-efgh ', email: ' New3@Shop.test ' });
+  const rpcCall = calls.find((c) => c.url.includes('/rpc/redeem_access_code'));
+  check('new address → invite link + "Finish joining" email', r.statusCode === 200 && links.at(-1)?.type === 'invite' && /Finish joining/.test(mails.at(-1)?.subject ?? ''), { r: r.data, links, s: mails.at(-1)?.subject });
+  check('code upper-cased, email normalized for the database', JSON.stringify(rpcCall?.body) === JSON.stringify({ p_code: 'ABCD-EFGH', p_email: 'new3@shop.test' }), rpcCall?.body);
+  check('email links to /auth/callback?token_hash=…&type=invite', (mails.at(-1)?.text ?? '').includes('https://www.901safety.com/auth/callback?token_hash=ht_invite&type=invite'), mails.at(-1)?.text?.slice(0, 300));
+  check('response never says whether the address had an account', JSON.stringify(Object.keys(r.data).sort()) === JSON.stringify(['ok', 'role']), r.data);
+
+  rpcAnswer = { ok: true, repeat: false, role: 'officer', outcome: 'upgraded', existing: true };
+  r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'DT-TEAM-1', email: 'owner@shop.test' });
+  check('existing account → sign-in link, "officer" in the email', r.statusCode === 200 && links.at(-1)?.type === 'magiclink' && /public-safety officer/.test(mails.at(-1)?.text ?? ''), { links: links.at(-1), t: mails.at(-1)?.text?.slice(0, 200) });
+
+  calls.length = 0;
+  r = await run('api/join.ts', 'POST', null, { action: 'waitlist', email: 'wanda@shop.test', name: '  Wanda   W. ', organization: 'Gayoso Grocer', note: 'Corner of Main' });
+  const wl = calls.find((c) => c.url.startsWith('https://fake.supabase.co/rest/v1/waitlist'));
+  check('waitlist → 200, fields cleaned', r.statusCode === 200 && (wl?.body as { name?: string })?.name === 'Wanda W.', wl?.body);
+  waitlistAnswer = json(409, { code: '23505', message: 'duplicate key value violates unique constraint "waitlist_pending_email_idx"' });
+  r = await run('api/join.ts', 'POST', null, { action: 'waitlist', email: 'wanda@shop.test' });
+  check('repeat waitlist request → still 200 (no enumeration)', r.statusCode === 200, r.data);
+  waitlistAnswer = null;
+
+  let last = 0;
+  for (let i = 0; i < 9; i++) {
+    r = await run('api/join.ts', 'POST', null, { action: 'redeem', code: 'ABCD-EFGH', email: 'flood@shop.test' });
+    last = r.statusCode;
+  }
+  check('9th try for one address → 429', last === 429, last);
+  r = await run('api/join.ts', 'POST', null, { action: 'nope', email: 'x@shop.test' });
+  check('unknown action → 400', r.statusCode === 400);
+
+  // ---------------------------------------------------------------- Admin members
+  console.log('api/admin/members');
+  r = await run('api/admin/members.ts', 'POST', 'tok-biz', { action: 'passkeys.list', userId: USERS['tok-biz'].id });
+  check('business → 403', r.statusCode === 403, r.data);
+  r = await run('api/admin/members.ts', 'POST', null, { action: 'passkeys.list', userId: USERS['tok-biz'].id });
+  check('no session → 401', r.statusCode === 401, r.data);
+
+  calls.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'passkeys.list', userId: USERS['tok-biz'].id });
+  const listCall = calls.find((c) => c.url.startsWith('https://fake.supabase.co/rest/v1/passkeys'));
+  check('admin lists a member’s passkeys (scoped by user_id)', r.statusCode === 200 && r.data.passkeys?.length === 1 && listCall?.url.includes(`user_id=eq.${USERS['tok-biz'].id}`), { d: r.data, u: listCall?.url });
+
+  calls.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'passkeys.remove', userId: USERS['tok-biz'].id, passkeyId: '55555555-5555-5555-5555-555555555555' });
+  const del = calls.find((c) => c.method === 'DELETE' && c.url.startsWith('https://fake.supabase.co/rest/v1/passkeys'));
+  const aud = calls.find((c) => c.url.startsWith('https://fake.supabase.co/rest/v1/audit_log'));
+  check('remove filters by passkey AND member', r.statusCode === 200 && !!del?.url.includes('id=eq.55555555') && !!del?.url.includes(`user_id=eq.${USERS['tok-biz'].id}`), del?.url);
+  check('removal audited with the acting admin', (aud?.body as { action?: string; actor_id?: string })?.action === 'passkey.removed' && (aud?.body as { actor_id?: string })?.actor_id === USERS['tok-adm'].id, aud?.body);
+
+  links.length = 0; mails.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'passkeys.setupLink', userId: USERS['tok-biz'].id });
+  check('setup link → sign-in link with passkey=setup, emailed', r.statusCode === 200 && links.at(-1)?.type === 'magiclink' && (mails.at(-1)?.text ?? '').includes('passkey=setup'), { links: links.at(-1), t: mails.at(-1)?.text?.slice(0, 200) });
+
+  calls.length = 0; links.length = 0; mails.length = 0;
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'waitlist.approve', id: '44444444-4444-4444-4444-444444444444', role: 'officer' });
+  const invIns = calls.find((c) => c.method === 'POST' && c.url.startsWith('https://fake.supabase.co/rest/v1/officer_invites'));
+  const wlUpd = calls.find((c) => c.method === 'PATCH' && c.url.startsWith('https://fake.supabase.co/rest/v1/waitlist'));
+  check('approve → waitlist invite (officer) + invite link + email', r.statusCode === 200 && (invIns?.body as { source?: string; role?: string })?.source === 'waitlist' && (invIns?.body as { role?: string })?.role === 'officer' && links.at(-1)?.type === 'invite' && mails.length === 1, { r: r.data, inv: invIns?.body, links });
+  check('request marked approved + audited', (wlUpd?.body as { status?: string })?.status === 'approved' && calls.some((c) => c.url.includes('/rest/v1/audit_log') && (c.body as { action?: string })?.action === 'waitlist.approved'), wlUpd?.body);
+  r = await run('api/admin/members.ts', 'POST', 'tok-adm', { action: 'waitlist.approve', id: 'not-a-uuid' });
+  check('bad id → 400', r.statusCode === 400, r.data);
+  delete process.env.RESEND_API_KEY;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, CircleCheck, KeyRound, Mail, Send, ShieldCheck, UserCog } from 'lucide-react';
+import { ArrowLeft, Building2, CircleCheck, KeyRound, Mail, Send, ShieldCheck, Ticket, UserCog } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { loginWithPasskey, passkeysSupported } from '../lib/passkeys';
 import Logo from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
@@ -20,6 +21,10 @@ export default function LoginPage() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState('');
+  // Invite-only: the sign-up gate turned a new address away.
+  const [gated, setGated] = useState(false);
+  const { settings } = useAppSettings();
+  const inviteOnly = settings.signupMode === 'invite';
 
   useEffect(() => {
     if (session) navigate(from || (role ? homePathFor(role) : '/'), { replace: true });
@@ -29,13 +34,16 @@ export default function LoginPage() {
     e.preventDefault();
     if (!email.trim()) return;
     setError('');
+    setGated(false);
     setStatus('sending');
     try {
       await sendMagicLink(email);
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
-      setError(err instanceof Error ? err.message : 'Could not send the link. Try again.');
+      const message = err instanceof Error ? err.message : '';
+      if (/access code|invitation/i.test(message)) setGated(true);
+      else setError(message || 'Could not send the link. Try again.');
     }
   };
 
@@ -129,6 +137,7 @@ export default function LoginPage() {
                     onChange={(e) => {
                       setEmail(e.target.value);
                       setError('');
+                      setGated(false);
                     }}
                     placeholder="you@business.com"
                     className="input h-12 pl-10 text-[15px]"
@@ -136,6 +145,20 @@ export default function LoginPage() {
                   />
                 </div>
                 {error && <Banner tone="danger">{error}</Banner>}
+                {gated && (
+                  <Banner tone="warning" title="Membership is by invitation">
+                    There’s no account for {email.trim()} yet. Join with an access code, or ask to join and an administrator
+                    will review it.
+                    <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold">
+                      <Link to="/join" state={{ email: email.trim() }} className="underline underline-offset-2">
+                        Join with a code
+                      </Link>
+                      <Link to="/join" state={{ email: email.trim(), ask: true }} className="underline underline-offset-2">
+                        Ask to join
+                      </Link>
+                    </span>
+                  </Banner>
+                )}
                 <Button type="submit" block size="lg" loading={status === 'sending'} disabled={!email.trim()} icon={<Send className="h-4 w-4" />}>
                   {status === 'sending' ? 'Sending link…' : 'Email me a sign-in link'}
                 </Button>
@@ -154,8 +177,28 @@ export default function LoginPage() {
 
               <div className="mt-8 space-y-3 border-t border-line pt-6 text-[13px] text-muted">
                 <p className="flex gap-2.5">
+                  <Ticket className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />
+                  <span>
+                    Have an access code?{' '}
+                    <Link to="/join" className="font-semibold text-accent-strong hover:underline">
+                      Join with your code
+                    </Link>
+                    .
+                  </span>
+                </p>
+                <p className="flex gap-2.5">
                   <Building2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />
-                  New business? Entering your email creates your account — set up your storefront right after.
+                  {inviteOnly ? (
+                    <span>
+                      New business? Membership is by invitation —{' '}
+                      <Link to="/join" state={{ ask: true }} className="font-semibold text-accent-strong hover:underline">
+                        ask to join
+                      </Link>
+                      .
+                    </span>
+                  ) : (
+                    'New business? Entering your email creates your account — set up your storefront right after.'
+                  )}
                 </p>
                 <p className="flex gap-2.5">
                   <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />

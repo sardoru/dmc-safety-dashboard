@@ -18,15 +18,19 @@ export default function AuthCallback() {
     ran.current = true;
 
     (async () => {
-      // Already have a session (e.g. link opened twice)? Go home.
-      const { data: existing } = await supabase.auth.getSession();
-      if (existing.session) {
-        navigate('/', { replace: true });
-        return;
-      }
-
       const token_hash = params.get('token_hash');
       const type = (params.get('type') || 'magiclink') as EmailOtpType;
+      // An administrator's "set up a passkey" link lands on the one-tap prompt.
+      const setup = params.get('passkey') === 'setup';
+      const next = setup ? '/account?passkey=setup' : '/';
+
+      // Already have a session (e.g. link opened twice)? Go on. A setup link is
+      // still verified first, so the passkey lands on the account it was sent to.
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session && !(setup && token_hash)) {
+        navigate(next, { replace: true });
+        return;
+      }
 
       if (!token_hash) {
         setError('This sign-in link is missing its security token. Please request a new one.');
@@ -34,11 +38,11 @@ export default function AuthCallback() {
       }
 
       const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash, type });
-      if (verifyError) {
+      if (verifyError && !existing.session) {
         setError(verifyError.message || 'This link is invalid or has expired.');
         return;
       }
-      navigate('/', { replace: true });
+      navigate(next, { replace: true });
     })();
   }, [params, navigate]);
 

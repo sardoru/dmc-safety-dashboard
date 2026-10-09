@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, UserMinus, Users } from 'lucide-react';
+import { KeyRound, RefreshCw, UserMinus, Users } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useNow } from '../../hooks/useNow';
 import { cn, timeAgo } from '../../lib/format';
@@ -13,6 +13,7 @@ import { Banner, EmptyState } from '../ui/Feedback';
 import { Avatar } from '../ui/Misc';
 import { Dialog } from '../ui/Overlay';
 import ListSkeleton from './ListSkeleton';
+import MemberPasskeysDialog from './MemberPasskeysDialog';
 import { memberName, type TeamMember } from './team';
 
 interface TeamMembersCardProps {
@@ -31,11 +32,13 @@ function MemberRow({
   now,
   isYou,
   onRemove,
+  onPasskeys,
 }: {
   member: TeamMember;
   now: number;
   isYou: boolean;
   onRemove: () => void;
+  onPasskeys: () => void;
 }) {
   const name = memberName(member);
   const joined = member.joinedAt !== null ? timeAgo(member.joinedAt, now) : null;
@@ -64,6 +67,9 @@ function MemberRow({
       <span className="hidden sm:block">
         <RoleChip role={member.role} />
       </span>
+      <IconButton label={`Passkeys for ${name}`} size="sm" onClick={onPasskeys} className="self-start sm:self-center">
+        <KeyRound className="h-4 w-4" />
+      </IconButton>
       <IconButton
         label={isYou ? 'You can’t remove your own access' : `Remove officer access for ${name}`}
         size="sm"
@@ -92,6 +98,7 @@ export default function TeamMembersCard({
   const { push } = useToast();
   const [confirming, setConfirming] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [passkeysFor, setPasskeysFor] = useState<TeamMember | null>(null);
 
   const close = () => {
     if (!removing) setConfirming(null);
@@ -188,11 +195,15 @@ export default function TeamMembersCard({
               now={now}
               isYou={m.id === currentUserId}
               onRemove={() => setConfirming(m)}
+              onPasskeys={() => setPasskeysFor(m)}
             />
           ))}
         </ul>
       )}
 
+      {passkeysFor && (
+        <MemberPasskeysDialog key={passkeysFor.id} member={passkeysFor} isDemo={isDemo} onClose={() => setPasskeysFor(null)} />
+      )}
       <Dialog
         open={confirming !== null}
         onClose={close}

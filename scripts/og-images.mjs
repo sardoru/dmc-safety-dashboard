@@ -3,8 +3,10 @@
  * Render the link-preview cards (1200×630):
  *   public/og-image.png        — the site
  *   public/video/og-image.png  — the "How it works" film page
+ *   public/og/join.png         — /join (access codes)
+ *   public/og/live.png         — /live (the public map)
  *
- *   node scripts/og-images.mjs [--pw <playwright-core dir>] [--qr <qrcode dir>]
+ *   node scripts/og-images.mjs [--pw <playwright-core dir>] [--qr <qrcode dir>] [--only join,live]
  *
  * Background: scripts/og/background.jpg (Downtown Memphis at blue hour,
  * generated with Higgsfield — no text in it). Everything on top — words and a
@@ -14,8 +16,8 @@
  * (override with CHROME_PATH).
  */
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
@@ -108,11 +110,35 @@ const cards = [
       <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${filmLength}</div>
       ${sos}${scan(await qr(`${SITE}/how-it-works`), `${SITE_SHORT}/how-it-works`)}`),
   },
+  {
+    out: join(ROOT, 'public', 'og', 'join.png'),
+    html: page(`${brand}
+      <div class="eyebrow">Join with an access code</div>
+      <h1>Join the Downtown<br><em>safety network.</em></h1>
+      <p class="lede">Got an access code? Enter it with your work email — a one-tap link signs you in. No passwords.</p>
+      <div class="chips"><span>Access code</span><span>One-tap email link</span><span>Passkeys</span><span>Businesses &amp; officers</span></div>
+      ${sos}${scan(await qr(`${SITE}/join`), `${SITE_SHORT}/join`)}`),
+  },
+  {
+    out: join(ROOT, 'public', 'og', 'live.png'),
+    html: page(`${brand}
+      <div class="eyebrow">Live · updated every minute</div>
+      <h1>What’s been reported<br><em>downtown, live.</em></h1>
+      <p class="lede">Recent reports on a public map — type, status and an approximate spot. No names, photos or addresses.</p>
+      <div class="chips"><span>Last 48 hours</span><span>Open &amp; resolved</span><span>Privacy first</span><span>No sign-in</span></div>
+      ${sos}${scan(await qr(`${SITE}/live`), `${SITE_SHORT}/live`)}`),
+  },
 ];
+
+// --only join,live → just those cards (matched on the file name).
+const onlyIdx = process.argv.indexOf('--only');
+const only = onlyIdx > 0 ? process.argv[onlyIdx + 1].split(',') : null;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--headless=new'] });
 const ctx = await browser.newContext({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
 for (const card of cards) {
+  if (only && !only.some((name) => basename(card.out).startsWith(name))) continue;
+  mkdirSync(dirname(card.out), { recursive: true });
   const p = await ctx.newPage();
   await p.setContent(card.html, { waitUntil: 'load' });
   await p.evaluate(() => document.fonts.ready);

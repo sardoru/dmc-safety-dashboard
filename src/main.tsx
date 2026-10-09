@@ -36,6 +36,8 @@ window.addEventListener('vite:preloadError', (event) => {
 const Landing = lazy(() => import('./pages/Landing'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const JoinPage = lazy(() => import('./pages/JoinPage'));
+const LiveMap = lazy(() => import('./pages/LiveMap'));
 const BusinessHome = lazy(() => import('./pages/BusinessHome'));
 const ReportCenter = lazy(() => import('./pages/ReportCenter'));
 const OpsCenter = lazy(() => import('./pages/OpsCenter'));
@@ -62,6 +64,8 @@ createRoot(document.getElementById('root')!).render(
                             <Route path="/welcome" element={<Landing />} />
                             <Route path="/login" element={<LoginPage />} />
                             <Route path="/auth/callback" element={<AuthCallback />} />
+                            <Route path="/join" element={<JoinPage />} />
+                            <Route path="/live" element={<LiveMap />} />
                             <Route
                               element={
                                 <RequireAuth>

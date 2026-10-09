@@ -3,6 +3,63 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.0] — 2026-10-09 — Access codes, invite-only sign-up, public live map
+
+Membership tools ported from the login-link-passkey kit onto this app's own auth (Supabase
+magic links + passkeys — the auth engine is unchanged), and a public map so anyone can follow
+what's being reported downtown. **Needs migration `0004_membership_and_public_map.sql`** —
+applied to production on 2026-10-09 (safe to run more than once; 39/39 scenarios locally, a
+rolled-back smoke test in production). The Supabase **Before User Created** hook is enabled in
+production; sign-up stays open until an admin turns on invite-only.
+
+### Added
+- **Access codes** (Admin → Access). One code, many seats (default 10, up to 1,000); joins as
+  a member business or a public-safety officer (officer codes start at 1 seat, with a
+  warning); optional expiry (24 hours to 90 days); a random `XXXX-XXXX` code without
+  look-alike characters, or your own. Copy the invite link, show or print a **QR card**,
+  revoke it, and see who used it. Seats can't be oversold, each address takes one seat per
+  code, and a code only ever raises a role — never lowers it.
+- **`/join`** (public). Enter the code and a work email: a new address gets an invitation
+  link, an existing account gets its access raised and a sign-in link. `?code=` fills the
+  code in (the QR card and invite link use it). The page answers the same whether or not the
+  address has an account; it's rate-limited and has a honeypot.
+- **Invite-only sign-up** (Admin → Access → Who can join). When it's on, the database refuses
+  new accounts without an invitation or a code; members already in can always sign in. The
+  sign-in page explains it and links to `/join`, where people without a code can **ask to
+  join** — admins approve a request as a business or an officer (the invitation email goes
+  out) or dismiss it.
+- **Activity** (Admin → Activity): an append-only record of codes created, used and revoked,
+  invitations, role changes, passkey removals and setup links, decisions on requests and
+  settings changes. Admins only; nobody can edit or delete entries.
+- **Passkeys per member** (Admin → Team → key icon): each device with when it was added and
+  last used; remove one, or **email a setup link** that opens on the member's own phone or
+  computer on a one-tap "Add a passkey" prompt (`/account?passkey=setup`).
+- **Public live map at `/live`** — no sign-in. Community reports from the last 6 hours,
+  24 hours, 48 hours or 7 days: the type of report, its priority, its status and an
+  approximate spot (about a block). Never text, people, vehicles, photos, the reporter or an
+  address; officers-only and closed-as-unfounded reports never appear. Refreshes every
+  minute. Admins can pause the map or delay new reports by 15 minutes to 2 hours. The landing
+  page links to it.
+- **Link-preview cards** for `/join` and `/live` (each with a QR code to the page); both pages
+  are extra HTML entries of the same app.
+
+### Security
+- `redeem_access_code()` runs only from the server (service role), the sign-up hook only as
+  Supabase Auth, and `public_incidents()` is the one new thing the public can call — a fixed,
+  sanitized column list.
+- In invite-only mode a refused sign-up tells that person their address has no account yet —
+  that is what gating sign-up means. Open mode, `/join` and requests to join reveal nothing.
+
+### Verified
+- API harness 75/75 (new: `/api/join`, `/api/admin/members`); SQL scenarios 39/39.
+- 48 headless-browser checks — `/live`, `/join`, the sign-in page and the admin Access,
+  Activity and Team tabs, at desktop and 390 px phone widths, light and dark, in demo mode and
+  against the production database (read-only).
+- The sign-up hook end to end in production: open mode creates the account; invite-only
+  refuses the sign-in page's request with HTTP 403 and the message it shows; a pending
+  invitation lets the account through and is claimed. Production was put back to open mode
+  and every test account, invitation and audit row removed.
+
 ## [0.3.1] — 2026-10-08 — Security + correctness review of the redesign
 
 A full review of 0.3.0 (API/RLS security, frontend correctness, voice integrations) after it

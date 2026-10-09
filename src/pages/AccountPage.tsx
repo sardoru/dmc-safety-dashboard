@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { KeyRound, LifeBuoy } from 'lucide-react';
 import EmergencyContacts from '../components/EmergencyContacts';
 import PasskeyManager from '../components/PasskeyManager';
@@ -10,8 +11,38 @@ import { Card, CardHeader } from '../components/ui/Card';
 import { useAuth } from '../context/AuthContext';
 
 export default function AccountPage() {
-  const { role, isDemo } = useAuth();
+  const { role, isDemo, email } = useAuth();
   const business = role === 'business';
+  // ?passkey=setup — arrived from an administrator's setup link.
+  const [params, setParams] = useSearchParams();
+  const setup = !isDemo && params.get('passkey') === 'setup';
+  const endSetup = () =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('passkey');
+        return next;
+      },
+      { replace: true },
+    );
+
+  const passkeys = (
+    <Card>
+      <CardHeader
+        icon={<KeyRound className="h-[18px] w-[18px]" />}
+        title="Passkeys"
+        subtitle={isDemo ? undefined : 'Skip the email link on devices you trust.'}
+      />
+      {isDemo ? (
+        <p className="text-[13px] leading-relaxed text-muted">
+          Passkeys let you sign in with Face ID, Touch ID or your device PIN instead of waiting for an email link.
+          They’re available on the live dashboard.
+        </p>
+      ) : (
+        <PasskeyManager setup={setup} account={email} onSetupDone={endSetup} />
+      )}
+    </Card>
+  );
 
   return (
     <PageContainer>
@@ -25,6 +56,8 @@ export default function AccountPage() {
         }
       />
 
+      {setup && <div className="mb-5 max-w-xl">{passkeys}</div>}
+
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="min-w-0 space-y-5">
           <ProfileCard />
@@ -33,21 +66,7 @@ export default function AccountPage() {
         </div>
 
         <div className="min-w-0 space-y-5">
-          <Card>
-            <CardHeader
-              icon={<KeyRound className="h-[18px] w-[18px]" />}
-              title="Passkeys"
-              subtitle={isDemo ? undefined : 'Skip the email link on devices you trust.'}
-            />
-            {isDemo ? (
-              <p className="text-[13px] leading-relaxed text-muted">
-                Passkeys let you sign in with Face ID, Touch ID or your device PIN instead of waiting for an email link.
-                They’re available on the live dashboard.
-              </p>
-            ) : (
-              <PasskeyManager />
-            )}
-          </Card>
+          {!setup && passkeys}
 
           <Card>
             <CardHeader
