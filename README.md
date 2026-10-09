@@ -285,7 +285,8 @@ looks up the invited role).
 - **New or existing account:** a new address gets **Accept your invitation** (or **Finish joining**
   for codes and approved requests); an existing account gets **Sign in to the dashboard** — "You're
   now a Public Safety officer" when its role went up, the guide for the role it keeps when it
-  didn't. An invitation never lowers a role.
+  didn't; an account that has never signed in gets the invitation again. An invitation never
+  lowers a role — an account's or an open invitation's.
 - **Films:** one list in [`api/_lib/films.ts`](./api/_lib/films.ts) — titles, lengths, chapter
   starts, posters. The harness checks it against the film pages; set `HOW_TO_JOIN_LENGTH` when
   "How to join and take part" is cut.
@@ -342,8 +343,9 @@ supabase/migrations/     schema + RLS
   seat and emails a link to the address, which proves it. A leaked code can only burn seats
   (revoke it); it can't raise anyone's role beyond the code's, or lower one.
 - Only administrators send invitations, and an invitation never lowers a role: an existing
-  account is raised to the invited role or keeps its own (removing officer access is a separate,
-  confirmed action in Team).
+  account — or an open invitation — is raised to the invited role or keeps its own (removing
+  officer access is a separate, confirmed action in Team). A failed lookup or write stops before
+  any email is sent.
 - The public map (`/live`) reads only `public_incidents()`: community reports, type, priority,
   status and a position rounded to about 100 m — no text, people, vehicles, photos, reporter or
   address. Officers-only and dismissed reports never appear; admins can pause it or delay it.

@@ -3,7 +3,7 @@ import { getAdmin } from './_lib/supabaseAdmin.js';
 import { sendEmail } from './_lib/emails.js';
 import { invitationEmail, type InviteAccount } from './_lib/invitations.js';
 import { methodNotAllowed, readBody, sendError, sendJson } from './_lib/http.js';
-import { clientIp, limiter, normalizeEmail, roleOf, signInLink } from './_lib/membership.js';
+import { clientIp, hasSignedIn, limiter, normalizeEmail, roleOf, signInLink, standingOf } from './_lib/membership.js';
 
 /**
  * Public membership entrance (no sign-in):
@@ -49,23 +49,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data, error } = await admin.rpc('redeem_access_code', { p_code: code, p_email: email });
     if (error) return sendError(res, 502, 'Could not check that code right now — try again.');
-    const r = data as { ok: boolean; error?: string; role?: string; outcome?: string; existing?: boolean };
+    const r = data as { ok: boolean; error?: string; role?: string; outcome?: string; existing?: boolean; repeat?: boolean };
     if (!r?.ok) return sendError(res, 400, CODE_ERRORS[r?.error ?? ''] ?? CODE_ERRORS.invalid_code);
 
     try {
-      const existing = Boolean(r.existing);
-      const url = await signInLink(admin, email, existing);
-      // A new address joins with the code's role; an existing account was
-      // raised to it, or keeps its own (equal or higher) role.
-      let role = roleOf(r.role);
+      // The email describes the role the address actually has now — not what
+      // the code once did. A repeat redemption replays the first outcome, and
+      // an admin may have changed the role since. A new address joins with its
+      // open invite's role (the code raised it, or it was already higher).
+      const { account: acct, pending } = await standingOf(admin, email);
+      const role = acct?.role ?? pending?.role ?? roleOf(r.role);
+      // An account that never signed in still gets the invitation copy.
       let account: InviteAccount = 'new';
-      if (existing && r.outcome === 'upgraded') {
-        account = 'raised';
-      } else if (existing) {
-        account = 'existing';
-        const { data: p } = await admin.from('profiles').select('role').eq('email', email).maybeSingle();
-        if (p) role = roleOf(p.role);
+      if (acct && (await hasSignedIn(admin, acct.id))) {
+        account = !r.repeat && r.outcome === 'upgraded' ? 'raised' : 'existing';
       }
+      const url = await signInLink(admin, email, Boolean(acct));
       await sendEmail(email, invitationEmail({ role, source: 'code', account, email, url, code }));
     } catch (err) {
       console.error('[join] email failed', err);

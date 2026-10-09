@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireRole, type Role } from '../_lib/auth.js';
+import { requireRole } from '../_lib/auth.js';
 import { getAdmin } from '../_lib/supabaseAdmin.js';
 import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
 import { invitationEmail, type InviteAccount } from '../_lib/invitations.js';
 import { methodNotAllowed, readBody, sendError, sendJson } from '../_lib/http.js';
-import { accountExists, audit, inviterName, ROLE_RANK, roleOf, signInLink } from '../_lib/membership.js';
+import { audit, grantRole, hasSignedIn, inviterName, signInLink } from '../_lib/membership.js';
 import { hashDisplayKey, newDisplayKey } from '../_lib/displays.js';
 
 /**
@@ -39,44 +39,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (w.status !== 'pending') return sendError(res, 409, 'That request was already handled');
         const email = String(w.email).toLowerCase();
 
-        // Never lower anyone: the email speaks to the role they end up with.
-        const existing = await accountExists(admin, email);
-        let joinsAs: Role = role;
-        let account: InviteAccount = 'new';
-        if (existing) {
-          account = 'existing';
-          const { data: p } = await admin.from('profiles').select('id, role').eq('email', email).maybeSingle();
-          if (p && ROLE_RANK[role] > ROLE_RANK[roleOf(p.role)]) {
-            const { error } = await admin.from('profiles').update({ role }).eq('id', p.id);
-            if (error) throw new Error(error.message);
-            account = 'raised';
-          } else if (p) {
-            joinsAs = roleOf(p.role);
-          }
-        } else {
-          const { data: pending } = await admin
-            .from('officer_invites')
-            .select('id, role')
-            .eq('status', 'pending')
-            .eq('email', email)
-            .maybeSingle();
-          if (pending) {
-            if (ROLE_RANK[role] > ROLE_RANK[roleOf(pending.role)]) {
-              await admin.from('officer_invites').update({ role, source: 'waitlist' }).eq('id', pending.id);
-            } else {
-              joinsAs = roleOf(pending.role);
-            }
-          } else {
-            const { error } = await admin
-              .from('officer_invites')
-              .insert({ email, role, status: 'pending', source: 'waitlist', invited_by: actor.id });
-            if (error) throw new Error(error.message);
-          }
-        }
+        // Raise, never lower (a failed lookup or write throws before any email);
+        // the email speaks to the role they end up with.
+        const grant = await grantRole(admin, email, role, { source: 'waitlist', invitedBy: actor.id });
+        const existing = grant.accountId !== null;
+        const firstTime = grant.accountId === null || !(await hasSignedIn(admin, grant.accountId));
+        const account: InviteAccount = firstTime ? 'new' : grant.raisedFrom ? 'raised' : 'existing';
 
         const url = await signInLink(admin, email, existing);
         const who = await inviterName(admin, actor);
-        await sendEmail(email, invitationEmail({ role: joinsAs, source: 'request', account, email, url, inviterName: who }));
+        await sendEmail(email, invitationEmail({ role: grant.role, source: 'request', account, email, url, inviterName: who }));
         await admin
           .from('waitlist')
           .update({ status: 'approved', role, decided_by: actor.id, decided_at: new Date().toISOString() })

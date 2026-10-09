@@ -32,14 +32,22 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 - `scripts/email-previews.ts` writes every variant as HTML + text to look at in a browser.
 
 ### Changed
-- `/api/officers/invite` accepts `business` as well as `officer` and `admin`, rejects an unknown
-  role (no role still means officer), and **never lowers an existing account**: someone who
-  already has the role or a higher one keeps it (`status: "unchanged"`) and gets the guide for the
-  role they have. Before, an invitation set the role outright — inviting an administrator as an
-  officer demoted them.
-- Approving a request to join, or redeeming a code, with an existing account sends the guide for
-  the role the account ends up with (it keeps a higher one).
-- A failed role update or invite record now stops the request before an email promises access.
+- `/api/officers/invite` accepts `business` as well as `officer` and `admin`, and a missing or
+  unknown role is a 400 (it used to default to officer). It **never lowers anyone**: an existing
+  account that already has the role or a higher one keeps it (`status: "unchanged"`) and gets the
+  guide for the role it has; an open invitation is raised in place or kept — no longer deleted and
+  re-made, so a business re-invite can't replace a pending officer invite. Before, an invitation
+  set an account's role outright — inviting an administrator as an officer demoted them.
+- One never-lower rule for every way in (`grantRole` / `standingOf` in `api/_lib/membership.ts`),
+  and every email describes the role the address actually has: an approval or code redemption
+  that keeps a higher role says so; a **repeat** code redemption describes the account as it is
+  now, not what the code did the first time.
+- An account that has never signed in (its first invite unopened) gets the invitation again —
+  "Accept your invitation", "Register your storefront" — not "Already a member".
+- Invitations Supabase sends itself take the role from the profile first (the sign-up trigger
+  has written it by then), then the open invite, then member business.
+- Every lookup and write on these paths is checked: a failure stops the request (5xx) before any
+  email goes out.
 
 ### Fixed
 - Admin → Team → **Pending invites** labelled business invitations "Public Safety", and revoking
@@ -47,11 +55,13 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 - Invited administrators with an existing account were told "You're now a Public Safety officer".
 
 ### Verified
-- API harness 152/152 (42 new: every role × way in × account — 54 emails — has no AI, vendor or
+- API harness 178/178 (68 new: every role × way in × account — 54 emails — has no AI, vendor or
   "person" wording, links all three films and the sign-in link, says 911 first and how long the
   link lasts, escapes names, stays small; role-specific subjects, headings, buttons and chapter
-  links; business invites through the admin API; the never-lower rule; Supabase-sent invitations;
-  the film list matches the film pages).
+  links; business invites through the admin API; never-lower for accounts and open invitations;
+  repeat code redemptions; never-signed-in accounts; failed lookups and writes send nothing;
+  Supabase-sent invitations from the profile, a stale invite, the open invite or nothing; the film
+  list matches the film pages).
 - Screenshots of all 15 variants at 600 px and 375 px, plus desktop, dark mode and images off.
 
 ## [0.4.3] — 2026-10-09 — Wall display for the office TV

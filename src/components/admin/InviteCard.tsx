@@ -11,7 +11,10 @@ import { Field, Input, Select } from '../ui/Form';
 import { INVITE_ROLES, memberName, ROLE_HINT, ROLE_RANK, roleNoun, type PendingInvite, type TeamMember } from './team';
 
 interface InviteResult {
-  /** invited: a new address · granted: an existing account was raised · unchanged: it already had this role or a higher one. */
+  /**
+   * invited: a new address, an open invitation, or an account that never signed in ·
+   * granted: an existing account was raised · unchanged: it already had this role or a higher one.
+   */
   status: 'granted' | 'invited' | 'unchanged';
   /** The role they have now (an invitation never lowers one). */
   role?: Role;
@@ -96,10 +99,16 @@ export default function InviteCard({ isDemo, members, invites, currentEmail, onC
           body: `${address} already ${now === role ? `has ${ROLE_LABEL[now]} access` : `is ${roleNoun(now)} — an invitation never lowers a role`}. ${emailed}`,
           tone: 'info',
         });
+      } else if (now !== role) {
+        push({
+          title: 'Invitation re-sent',
+          body: `${address} already has an invitation as ${roleNoun(now)} — an invitation never lowers a role. We sent it again.`,
+          tone: 'info',
+        });
       } else {
         push({
           title: resend ? 'Invitation re-sent' : 'Invitation sent',
-          body: `${address} will join as ${roleNoun(role)} once they open the email.`,
+          body: `${address} will join as ${roleNoun(now)} once they open the email.`,
           tone: 'success',
         });
       }

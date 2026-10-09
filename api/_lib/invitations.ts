@@ -159,7 +159,7 @@ const BUSINESS_FEATURES: (live: string) => Item[] = (live) => [
   {
     icon: '🗺️',
     label: 'The public live map',
-    body: ['What’s been reported downtown, open to anyone at ', a(display(live), live), ': the type, priority, status and an approximate spot, never details or people.'],
+    body: ['What’s been reported downtown, open to anyone at ', a(display(live), live), ' whenever the public map is switched on: the type, priority, status and an approximate spot, never details or people.'],
   },
 ];
 
@@ -172,7 +172,7 @@ const OFFICER_FEATURES: Item[] = [
   {
     icon: '🔔',
     label: 'Voice alerts',
-    body: ['Tap ', b('Voice alerts'), ' in the Operations Center to hear new reports read aloud as they arrive. Choose which priorities are read out in Settings → Voice & alerts.'],
+    body: ['Tap the bell (', b('Voice alerts'), ') at the top of the Operations Center to hear new reports read aloud as they arrive. Choose which priorities are read out in Settings → Voice & alerts.'],
   },
   {
     icon: '📻',
@@ -385,7 +385,7 @@ function stepsFor(o: InvitationOptions, button: string): Step[] {
     { title: 'Open the Operations Center', body: ['It’s your home screen once you’re signed in.'] },
     {
       title: 'Turn on Voice alerts',
-      body: ['Tap ', b('Voice alerts'), ' at the top of the Operations Center. Your browser needs one click before it can speak.'],
+      body: ['Tap the bell (', b('Voice alerts'), ') at the top of the Operations Center — on a phone it’s just the bell icon. Your browser needs one click before it can speak.'],
     },
     passkey(false),
   ];

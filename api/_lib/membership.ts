@@ -31,11 +31,6 @@ export async function signInLink(
   return `${siteUrl()}/auth/callback?${params.toString()}`;
 }
 
-export async function accountExists(admin: SupabaseClient, email: string): Promise<boolean> {
-  const { data } = await admin.from('profiles').select('id').eq('email', email).maybeSingle();
-  return Boolean(data);
-}
-
 /** Server-side audit entry with the acting admin (triggers can't see them under the service role). */
 export async function audit(
   admin: SupabaseClient,
@@ -84,6 +79,87 @@ export function parseRole(value: unknown): Role | null {
 /** A role from the database; anything unexpected is treated as the least-privileged one. */
 export function roleOf(value: unknown): Role {
   return parseRole(value) ?? 'business';
+}
+
+/** Where an address stands: its account, or — when it has none — its open invitation. */
+export interface Standing {
+  account: { id: string; role: Role } | null;
+  pending: { id: string; role: Role } | null;
+}
+
+/** Read an address's standing. A failed lookup throws: nothing should be sent on a guess. */
+export async function standingOf(admin: SupabaseClient, email: string): Promise<Standing> {
+  const { data: p, error } = await admin.from('profiles').select('id, role').eq('email', email).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (p) return { account: { id: String(p.id), role: roleOf(p.role) }, pending: null };
+  const { data: inv, error: inviteError } = await admin
+    .from('officer_invites')
+    .select('id, role')
+    .eq('email', email)
+    .eq('status', 'pending')
+    .maybeSingle();
+  if (inviteError) throw new Error(inviteError.message);
+  return { account: null, pending: inv ? { id: String(inv.id), role: roleOf(inv.role) } : null };
+}
+
+/** The outcome of granting a role: what they have now, and what changed. */
+export interface Grant {
+  /** The role they have — or get when they open the link — after the grant. */
+  role: Role;
+  /** Their account, when the address already has one. */
+  accountId: string | null;
+  /** The account's role before, when the grant raised it. */
+  raisedFrom: Role | null;
+}
+
+/**
+ * Give an address a role without ever lowering one: an account is raised to it
+ * or keeps a higher role; an open invitation is raised or kept; otherwise a
+ * pending invite is created (the sign-up trigger applies it). Every write is
+ * checked — a failure throws before anyone is emailed.
+ */
+export async function grantRole(
+  admin: SupabaseClient,
+  email: string,
+  role: Role,
+  by: { source: 'admin' | 'waitlist'; invitedBy: string },
+): Promise<Grant> {
+  const { account, pending } = await standingOf(admin, email);
+  if (account) {
+    if (ROLE_RANK[role] <= ROLE_RANK[account.role]) return { role: account.role, accountId: account.id, raisedFrom: null };
+    const { error } = await admin.from('profiles').update({ role }).eq('id', account.id);
+    if (error) throw new Error(error.message);
+    return { role, accountId: account.id, raisedFrom: account.role };
+  }
+  if (pending) {
+    if (ROLE_RANK[role] <= ROLE_RANK[pending.role]) return { role: pending.role, accountId: null, raisedFrom: null };
+    const { error } = await admin
+      .from('officer_invites')
+      .update({ role, source: by.source, invited_by: by.invitedBy })
+      .eq('id', pending.id);
+    if (error) throw new Error(error.message);
+    return { role, accountId: null, raisedFrom: null };
+  }
+  const { error } = await admin
+    .from('officer_invites')
+    .insert({ email, role, status: 'pending', source: by.source, invited_by: by.invitedBy });
+  if (error) throw new Error(error.message);
+  return { role, accountId: null, raisedFrom: null };
+}
+
+/**
+ * Has this account ever signed in? An account made by an invite link it never
+ * opened hasn't — its email should still read as an invitation. Unknown (the
+ * lookup failed) counts as yes.
+ */
+export async function hasSignedIn(admin: SupabaseClient, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data?.user) return true;
+    return Boolean(data.user.last_sign_in_at);
+  } catch {
+    return true;
+  }
 }
 
 /**
