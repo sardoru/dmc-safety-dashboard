@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Check, Link2, ListVideo, Phone, Play, ScrollText } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Check, CirclePlay, Link2, ListVideo, Phone, Play, ScrollText } from 'lucide-react';
 import Logo from '../components/brand/Logo';
 import { buttonClasses } from '../components/ui/styles';
 import { cn } from '../lib/format';
-import { FILM, type FilmChapter } from './filmData';
+import type { FilmChapter, FilmData, FilmSentence } from './types';
 import { formatTime, startFromLocation } from './time';
 
 /** Index of the chapter playing at `t` (-1 before the first one). */
@@ -14,6 +14,11 @@ function chapterAt(chapters: FilmChapter[], t: number): number {
   });
   return idx;
 }
+
+const SPEAKER: Record<NonNullable<FilmSentence['speaker']>, string> = {
+  interviewer: 'Interviewer',
+  caller: 'Caller',
+};
 
 function TimeButton({ t, onSeek, className }: { t: number; onSeek: (t: number) => void; className?: string }) {
   return (
@@ -31,13 +36,25 @@ function TimeButton({ t, onSeek, className }: { t: number; onSeek: (t: number) =
   );
 }
 
-export default function FilmPage() {
+export interface FilmPageProps {
+  film: FilmData;
+  /** Above the title, before the length: "How it works". */
+  kicker: string;
+  title: string;
+  lede: string;
+  /** The companion film, linked under the lede. */
+  other?: { href: string; label: string };
+  /** The closing call to action. */
+  cta: { title: string; body: string; href: string; label: string; icon: ReactNode };
+}
+
+export default function FilmPage({ film, kicker, title, lede, other, cta }: FilmPageProps) {
   const video = useRef<HTMLVideoElement>(null);
   const [startAt] = useState(() => startFromLocation(window.location));
   const [now, setNow] = useState(startAt ?? 0);
   const [started, setStarted] = useState(false);
   const [copied, setCopied] = useState(false);
-  const chapters = FILM.chapters;
+  const chapters = film.chapters;
   const active = chapterAt(chapters, now);
 
   const sentences = useMemo(
@@ -54,12 +71,12 @@ export default function FilmPage() {
     const v = video.current;
     if (!v || startAt === null) return;
     const apply = () => {
-      v.currentTime = Math.min(startAt, Math.max(0, (v.duration || FILM.duration) - 1));
+      v.currentTime = Math.min(startAt, Math.max(0, (v.duration || film.duration) - 1));
     };
     if (v.readyState >= 1) apply();
     else v.addEventListener('loadedmetadata', apply, { once: true });
     return () => v.removeEventListener('loadedmetadata', apply);
-  }, [startAt]);
+  }, [startAt, film.duration]);
 
   /** Jump and play — called inside the click, so play() keeps the user gesture. */
   const seek = useCallback((t: number) => {
@@ -100,13 +117,15 @@ export default function FilmPage() {
       <main className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
         <div className="max-w-3xl animate-slide-up">
           <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-accent-strong">
-            How it works · {formatTime(FILM.duration)}
+            {kicker} · {formatTime(film.duration)}
           </p>
-          <h1 className="mt-2 text-balance text-3xl font-bold tracking-tight sm:text-5xl">How the Safety Dashboard works</h1>
-          <p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-muted sm:text-lg">
-            A self-regulated safety dashboard for Downtown Memphis: how a business reports what it sees, how the
-            Downtown public-safety team responds, and how the whole block stays in the loop.
-          </p>
+          <h1 className="mt-2 text-balance text-3xl font-bold tracking-tight sm:text-5xl">{title}</h1>
+          <p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-muted sm:text-lg">{lede}</p>
+          {other && (
+            <a href={other.href} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-strong hover:underline">
+              <CirclePlay className="h-4 w-4" /> {other.label}
+            </a>
+          )}
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
@@ -115,8 +134,8 @@ export default function FilmPage() {
               <video
                 ref={video}
                 className="aspect-video w-full"
-                src={FILM.src}
-                poster={FILM.poster}
+                src={film.src}
+                poster={film.poster}
                 controls={started}
                 playsInline
                 preload="metadata"
@@ -124,7 +143,7 @@ export default function FilmPage() {
                 onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)}
                 onSeeked={(e) => setNow(e.currentTarget.currentTime)}
               >
-                <track kind="captions" src={FILM.captions} srcLang="en" label="English" />
+                <track kind="captions" src={film.captions} srcLang="en" label="English" />
               </video>
               {!started && (
                 <button
@@ -135,7 +154,7 @@ export default function FilmPage() {
                 >
                   <span className="inline-flex items-center gap-2 rounded-full bg-gold-400 px-4 py-2 text-sm font-bold text-navy-900 shadow-glow transition group-hover:bg-gold-300">
                     <Play className="h-4 w-4 fill-current" />
-                    {startAt ? `Watch from ${formatTime(startAt)}` : `Watch · ${formatTime(FILM.duration)}`}
+                    {startAt ? `Watch from ${formatTime(startAt)}` : `Watch · ${formatTime(film.duration)}`}
                   </span>
                 </button>
               )}
@@ -207,10 +226,12 @@ export default function FilmPage() {
                         title={`Play from ${formatTime(s.start)}`}
                         className={cn(
                           'mr-1 rounded px-0.5 text-left transition hover:bg-accent-soft hover:text-ink',
+                          s.speaker && 'my-1 block border-l-2 border-accent/50 pl-2 italic',
                           i === activeSentence && started && 'bg-accent-soft text-ink',
                         )}
                       >
-                        {s.text}
+                        {s.speaker && <span className="mr-1 font-semibold not-italic text-ink">{SPEAKER[s.speaker]}:</span>}
+                        {s.speaker ? `“${s.text}”` : s.text}
                       </button>
                     );
                   })}
@@ -222,11 +243,11 @@ export default function FilmPage() {
 
         <section className="mt-16 grid grid-cols-1 gap-4 rounded-3xl border border-line bg-surface p-6 sm:p-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
           <div>
-            <h2 className="text-xl font-bold">Downtown business? Join the network.</h2>
-            <p className="mt-1 text-sm text-muted">Sign up with just your email — no passwords — and set up your storefront in a minute.</p>
+            <h2 className="text-xl font-bold">{cta.title}</h2>
+            <p className="mt-1 text-sm text-muted">{cta.body}</p>
           </div>
-          <a href="/login" className={buttonClasses({ variant: 'gold', size: 'lg' })}>
-            <Building2 className="h-5 w-5" /> Register your business
+          <a href={cta.href} className={buttonClasses({ variant: 'gold', size: 'lg' })}>
+            {cta.icon} {cta.label}
           </a>
         </section>
       </main>

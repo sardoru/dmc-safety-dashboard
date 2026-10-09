@@ -1,34 +1,65 @@
 #!/usr/bin/env node
 /**
- * Bring the "How it works" film into the site.
+ * Bring one of the site's films into the site.
  *
- *   node scripts/film-data.mjs <film renders dir> [upload date YYYY-MM-DD]
+ *   node scripts/film-data.mjs <film renders dir> [upload date YYYY-MM-DD] [--film how-it-works|how-to-report]
  *
  * Reads <dir>/chapters.json (from the film project's web-assets step), copies
- * the web encode, poster and captions into public/video/, writes
- * src/film/filmData.ts, and fills the video meta + VideoObject JSON-LD between
- * the markers in how-it-works.html. Refuses words the owner ruled out of the
- * product's language.
+ * the web encode, poster and captions into the film's public/video folder,
+ * writes the film's data module (src/film/…), updates its length in
+ * src/film/filmMeta.ts, and fills the video meta + VideoObject JSON-LD between
+ * the markers in the film's page (<film>.html). Refuses words the owner ruled
+ * out of the product's language. --film defaults to how-it-works.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const SITE = 'https://www.901safety.com';
-const PAGE = `${SITE}/how-it-works`;
-const [dirArg, dateArg] = process.argv.slice(2);
-if (!dirArg) {
-  console.error('usage: node scripts/film-data.mjs <film renders dir> [YYYY-MM-DD]');
+
+const FILMS = {
+  'how-it-works': {
+    html: 'how-it-works.html',
+    folder: 'video',
+    video: 'dmc-safety-how-it-works.mp4',
+    web: 'dmc-safety-how-it-works-web.mp4',
+    module: 'filmData.ts',
+    meta: 'FILM_DURATION',
+    name: 'How the Safety Dashboard works',
+    description:
+      'A self-regulated safety dashboard for Downtown Memphis: how businesses report what they see, how the Downtown public-safety team responds, and how the block stays in the loop.',
+  },
+  'how-to-report': {
+    html: 'how-to-report.html',
+    folder: 'video/how-to-report',
+    video: 'dmc-safety-how-to-report.mp4',
+    web: 'dmc-safety-how-to-report-web.mp4',
+    module: 'reportFilmData.ts',
+    meta: 'REPORT_FILM_DURATION',
+    name: 'How to report an incident',
+    description:
+      'How to report an incident on the Core Downtown Memphis Safety Dashboard — by voice, with the guided form, or with a quick alert — and how Downtown public-safety officers respond.',
+  },
+};
+
+const args = process.argv.slice(2);
+const fi = args.indexOf('--film');
+const id = fi >= 0 ? args[fi + 1] : 'how-it-works';
+const [dirArg, dateArg] = args.filter((_, i) => fi < 0 || (i !== fi && i !== fi + 1));
+const F = FILMS[id];
+if (!dirArg || !F) {
+  console.error(`usage: node scripts/film-data.mjs <film renders dir> [YYYY-MM-DD] [--film ${Object.keys(FILMS).join('|')}]`);
   process.exit(1);
 }
+const PAGE = `${SITE}/${id}`;
 const dir = resolve(dirArg);
 const uploadDate = dateArg ?? new Date().toISOString().slice(0, 10);
 
 const MEDIA = [
-  ['dmc-safety-how-it-works-web.mp4', 'dmc-safety-how-it-works.mp4'],
+  [F.web, F.video],
   ['poster.jpg', 'poster.jpg'],
   ['captions.vtt', 'captions.vtt'],
-  // public/video/og-image.png (the share card) is the site's own: scripts/og-images.mjs
+  // <folder>/og-image.png (the share card) is the site's own: scripts/og-images.mjs
 ];
 for (const [from] of MEDIA) {
   if (!existsSync(join(dir, from))) throw new Error(`missing ${join(dir, from)}`);
@@ -37,6 +68,7 @@ for (const [from] of MEDIA) {
 const data = JSON.parse(readFileSync(join(dir, 'chapters.json'), 'utf8'));
 const duration = Number(data.duration);
 if (!(duration > 0)) throw new Error('chapters.json: duration must be > 0');
+const SPEAKERS = new Set(['interviewer', 'caller']);
 const chapters = (data.chapters ?? []).map((c, i) => ({
   id: String(c.id ?? `chapter-${i + 1}`),
   title: String(c.title ?? '').trim(),
@@ -44,6 +76,7 @@ const chapters = (data.chapters ?? []).map((c, i) => ({
   sentences: (c.sentences ?? []).map((s) => ({
     text: String(s.text ?? '').trim(),
     start: Math.round(Number(s.start) * 100) / 100,
+    ...(SPEAKERS.has(s.speaker) ? { speaker: s.speaker } : {}),
   })),
 }));
 if (!chapters.length) throw new Error('chapters.json: no chapters');
@@ -51,6 +84,9 @@ chapters.forEach((c, i) => {
   if (!c.title) throw new Error(`chapter ${i + 1}: no title`);
   if (!(c.start >= 0 && c.start < duration)) throw new Error(`chapter ${i + 1}: start ${c.start} outside 0..${duration}`);
   if (i && c.start <= chapters[i - 1].start) throw new Error(`chapter ${i + 1}: starts before the previous one`);
+  c.sentences.forEach((s) => {
+    if (!s.text || !(s.start >= 0 && s.start <= duration)) throw new Error(`chapter ${i + 1}: bad sentence ${JSON.stringify(s)}`);
+  });
 });
 
 // The owner's rule (2026-10-08): no "AI" in the product's words.
@@ -59,44 +95,41 @@ const words = chapters.flatMap((c) => [c.title, ...c.sentences.map((s) => s.text
 const hits = words.filter((w) => BANNED.some((re) => re.test(w)));
 if (hits.length) throw new Error(`banned wording in the film text:\n  ${hits.join('\n  ')}`);
 
-// 1. media → public/video
-const out = join(ROOT, 'public', 'video');
+// 1. media → public/<folder>
+const out = join(ROOT, 'public', ...F.folder.split('/'));
 mkdirSync(out, { recursive: true });
 for (const [from, to] of MEDIA) copyFileSync(join(dir, from), join(out, to));
 
-// 2. src/film/filmData.ts
+// 2. the film's data module, and its length in filmMeta.ts (every film's length is kept)
 const ts = `// GENERATED by scripts/film-data.mjs from the film's chapters.json — do not edit by hand.
+import type { FilmData } from './types';
 
-export interface FilmSentence {
-  text: string;
-  start: number;
-}
-
-export interface FilmChapter {
-  id: string;
-  title: string;
-  start: number;
-  sentences: FilmSentence[];
-}
-
-export const FILM = {
+export const FILM: FilmData = {
   duration: ${Math.round(duration * 100) / 100},
-  src: '/video/dmc-safety-how-it-works.mp4',
-  poster: '/video/poster.jpg',
-  captions: '/video/captions.vtt',
-  chapters: ${JSON.stringify(chapters, null, 2).replace(/\n/g, '\n  ')} as FilmChapter[],
+  src: '/${F.folder}/${F.video}',
+  poster: '/${F.folder}/poster.jpg',
+  captions: '/${F.folder}/captions.vtt',
+  chapters: ${JSON.stringify(chapters, null, 2).replace(/\n/g, '\n  ')},
 };
 `;
-writeFileSync(join(ROOT, 'src', 'film', 'filmData.ts'), ts);
+writeFileSync(join(ROOT, 'src', 'film', F.module), ts);
+const metaPath = join(ROOT, 'src', 'film', 'filmMeta.ts');
+const lengths = Object.fromEntries(Object.values(FILMS).map((f) => [f.meta, 0]));
+if (existsSync(metaPath)) {
+  for (const m of readFileSync(metaPath, 'utf8').matchAll(/export const (\w+) = ([\d.]+);/g)) if (m[1] in lengths) lengths[m[1]] = Number(m[2]);
+}
+lengths[F.meta] = Math.round(duration * 100) / 100;
 writeFileSync(
-  join(ROOT, 'src', 'film', 'filmMeta.ts'),
-  `// GENERATED by scripts/film-data.mjs — just the film length, so pages that only
-// link to the film don't bundle its transcript. 0 = no film yet.
-export const FILM_DURATION = ${Math.round(duration * 100) / 100};
+  metaPath,
+  `// GENERATED by scripts/film-data.mjs — just the films' lengths, so pages that only
+// link to a film don't bundle its transcript. 0 = no film yet.
+${Object.entries(lengths)
+  .map(([k, v]) => `export const ${k} = ${v};`)
+  .join('\n')}
 `,
 );
 
-// 3. how-it-works.html: video meta + VideoObject with one Clip per chapter
+// 3. <film>.html: video meta + VideoObject with one Clip per chapter
 const iso = (s) => {
   const t = Math.round(s);
   const m = Math.floor(t / 60);
@@ -105,13 +138,12 @@ const iso = (s) => {
 const ld = {
   '@context': 'https://schema.org',
   '@type': 'VideoObject',
-  name: 'How the Safety Dashboard works',
-  description:
-    'A self-regulated safety dashboard for Downtown Memphis: how businesses report what they see, how the Downtown public-safety team responds, and how the block stays in the loop.',
-  thumbnailUrl: [`${SITE}/video/poster.jpg`, `${SITE}/video/og-image.png`],
+  name: F.name,
+  description: F.description,
+  thumbnailUrl: [`${SITE}/${F.folder}/poster.jpg`, `${SITE}/${F.folder}/og-image.png`],
   uploadDate,
   duration: iso(duration),
-  contentUrl: `${SITE}/video/dmc-safety-how-it-works.mp4`,
+  contentUrl: `${SITE}/${F.folder}/${F.video}`,
   embedUrl: PAGE,
   inLanguage: 'en',
   publisher: { '@type': 'Organization', name: 'Core Downtown Memphis Safety Dashboard', url: SITE },
@@ -123,16 +155,16 @@ const ld = {
     url: `${PAGE}?t=${Math.floor(c.start)}`,
   })),
 };
-const htmlPath = join(ROOT, 'how-it-works.html');
+const htmlPath = join(ROOT, F.html);
 let html = readFileSync(htmlPath, 'utf8');
 const fill = (name, body) => {
   const re = new RegExp(`(<!-- film:${name}:start -->)[\\s\\S]*?(\\s*<!-- film:${name}:end -->)`);
-  if (!re.test(html)) throw new Error(`how-it-works.html: markers film:${name} not found`);
+  if (!re.test(html)) throw new Error(`${F.html}: markers film:${name} not found`);
   html = html.replace(re, (_, a, b) => `${a}\n${body}${b}`);
 };
 fill('meta', `    <meta property="video:duration" content="${Math.round(duration)}" />`);
 fill('jsonld', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`);
 writeFileSync(htmlPath, html);
 
-const mb = (statSync(join(out, 'dmc-safety-how-it-works.mp4')).size / 1048576).toFixed(1);
-console.log(`film: ${chapters.length} chapters, ${words.length - chapters.length} sentences, ${iso(duration)}, video ${mb} MB`);
+const mb = (statSync(join(out, F.video)).size / 1048576).toFixed(1);
+console.log(`${id}: ${chapters.length} chapters, ${words.length - chapters.length} sentences, ${iso(duration)}, video ${mb} MB`);

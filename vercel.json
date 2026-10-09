@@ -45,6 +45,7 @@
   ],
   "rewrites": [
     { "source": "/how-it-works", "destination": "/how-it-works.html" },
+    { "source": "/how-to-report", "destination": "/how-to-report.html" },
     { "source": "/join", "destination": "/join.html" },
     { "source": "/live", "destination": "/live.html" },
     { "source": "/((?!api/|assets/|_vercel/).*)", "destination": "/index.html" }

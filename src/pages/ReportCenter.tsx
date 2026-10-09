@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Keyboard, Mic, Store, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CirclePlay, Keyboard, Mic, Store, Zap } from 'lucide-react';
 import type { Incident } from '../types';
+import { REPORT_FILM_DURATION } from '../film/filmMeta';
+import { formatTime } from '../film/time';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import type { CapturedReport } from '../lib/live';
@@ -157,6 +159,11 @@ export default function ReportCenter() {
               >
                 <ArrowLeft className="h-4 w-4" /> {step === 'review' ? 'Back' : 'Change method'}
               </button>
+            ) : REPORT_FILM_DURATION > 0 ? (
+              // A plain link: the film is its own page (how-to-report.html), not a route of this app.
+              <a href="/how-to-report" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink">
+                <CirclePlay className="h-4 w-4" /> How to report · {formatTime(REPORT_FILM_DURATION)}
+              </a>
             ) : undefined
           }
         />

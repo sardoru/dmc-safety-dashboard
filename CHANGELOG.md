@@ -3,6 +3,25 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.2] — 2026-10-09 — "How to report" film
+
+### Added
+- **https://www.901safety.com/how-to-report** — a 3:08 how-to film in light mode, 3Blue1Brown
+  style, narrated in Eleven v4 to ASD-STE100: before you report (911 first), report by voice,
+  the guided form, a quick alert, review and send, follow the status in My reports, and how
+  officers respond (acknowledge, responding, notes, BOLO, resolve). The voice chapter is a real
+  call on the voice line; its first lines play in their own voices.
+- Seven chapters, a clickable transcript (the call's lines are labelled "Interviewer:" and
+  "Caller:"), `?t=` deep links, captions, a VideoObject with one Clip per chapter, and its own
+  share card (`public/video/how-to-report/og-image.png`). Each chapter's QR code in the film
+  opens the page at that chapter; the cover and end card open `/report`.
+- Links to it from the landing page (hero and footer), the "Report an incident" page, and the
+  first film's page (which it links back to).
+
+### Changed
+- The film page is shared: `FilmPage` takes the film and its words as props, each film page is
+  its own small entry, and `scripts/film-data.mjs --film <id>` brings in either film.
+
 ## [0.4.1] — 2026-10-09 — Voice interviews in an Eleven v4 voice
 
 ### Changed

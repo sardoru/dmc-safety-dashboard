@@ -3,10 +3,11 @@
  * Render the link-preview cards (1200×630):
  *   public/og-image.png        — the site
  *   public/video/og-image.png  — the "How it works" film page
+ *   public/video/how-to-report/og-image.png — the "How to report" film page
  *   public/og/join.png         — /join (access codes)
  *   public/og/live.png         — /live (the public map)
  *
- *   node scripts/og-images.mjs [--pw <playwright-core dir>] [--qr <qrcode dir>] [--only join,live]
+ *   node scripts/og-images.mjs [--pw <playwright-core dir>] [--qr <qrcode dir>] [--only join,live,how-to-report]
  *
  * Background: scripts/og/background.jpg (Downtown Memphis at blue hour,
  * generated with Higgsfield — no text in it). Everything on top — words and a
@@ -37,8 +38,10 @@ const BG = join(ROOT, 'scripts', 'og', 'background.jpg');
 if (!existsSync(BG)) throw new Error('missing scripts/og/background.jpg');
 const dataUrl = (path, type) => `data:${type};base64,${readFileSync(path).toString('base64')}`;
 const font = (pkg, file) => dataUrl(join(ROOT, 'node_modules', '@fontsource-variable', pkg, 'files', file), 'font/woff2');
-const filmSeconds = Number(readFileSync(join(ROOT, 'src', 'film', 'filmMeta.ts'), 'utf8').match(/FILM_DURATION = ([\d.]+)/)?.[1] ?? 0);
-const filmLength = `${Math.floor(filmSeconds / 60)}:${String(Math.floor(filmSeconds % 60)).padStart(2, '0')}`;
+const filmMeta = readFileSync(join(ROOT, 'src', 'film', 'filmMeta.ts'), 'utf8');
+const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const filmLength = clock(Number(filmMeta.match(/\bFILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
+const reportFilmLength = clock(Number(filmMeta.match(/\bREPORT_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 
 const qr = (url) =>
   QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#0b1222', light: '#ffffff' } });
@@ -111,6 +114,15 @@ const cards = [
       ${sos}${scan(await qr(`${SITE}/how-it-works`), `${SITE_SHORT}/how-it-works`)}`),
   },
   {
+    out: join(ROOT, 'public', 'video', 'how-to-report', 'og-image.png'),
+    html: page(`${brand}
+      <div class="eyebrow">How to report · film · ${reportFilmLength}</div>
+      <h1>How to report<br><em>an incident</em></h1>
+      <p class="lede">By voice, with the guided form, or with a quick alert — and how officers respond.</p>
+      <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${reportFilmLength}</div>
+      ${sos}${scan(await qr(`${SITE}/how-to-report`), `${SITE_SHORT}/how-to-report`)}`),
+  },
+  {
     out: join(ROOT, 'public', 'og', 'join.png'),
     html: page(`${brand}
       <div class="eyebrow">Join with an access code</div>
@@ -130,14 +142,15 @@ const cards = [
   },
 ];
 
-// --only join,live → just those cards (matched on the file name).
+// --only join,live,how-to-report → just those cards (matched on the output path under public/).
 const onlyIdx = process.argv.indexOf('--only');
 const only = onlyIdx > 0 ? process.argv[onlyIdx + 1].split(',') : null;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--headless=new'] });
 const ctx = await browser.newContext({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
 for (const card of cards) {
-  if (only && !only.some((name) => basename(card.out).startsWith(name))) continue;
+  const rel = card.out.slice(join(ROOT, 'public').length + 1);
+  if (only && !only.some((name) => basename(card.out).startsWith(name) || rel.split('/').includes(name))) continue;
   mkdirSync(dirname(card.out), { recursive: true });
   const p = await ctx.newPage();
   await p.setContent(card.html, { waitUntil: 'load' });
