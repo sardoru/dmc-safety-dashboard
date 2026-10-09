@@ -188,7 +188,8 @@ are **server-only** Vercel variables.
 | `ELEVENLABS_AGENT_TTS_MODEL`, `ELEVENLABS_AGENT_LLM` | script | agent voice model and brain: defaults `eleven_v4`, `gpt-5.6-terra` |
 | `ELEVENLABS_MODEL`, `ELEVENLABS_FALLBACK_MODEL`, `ELEVENLABS_VOICE_ID` | server | defaults `eleven_v4`, `eleven_multilingual_v2`, George |
 | `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails. `EMAIL_FROM` must be on a domain verified in Resend (production: `Core Downtown Memphis Safety <safety@901safety.com>`). |
-| `EMAIL_REPLY_TO` | server | optional: where replies to any email go (the sending domain has no inbox, so without it a reply bounces) |
+| `EMAIL_REPLY_TO` | server | optional: where replies to any email go (the sending domain has no inbox, so without it a reply bounces). Leave it empty when the reply relay is on. |
+| `RESEND_WEBHOOK_SECRET`, `INBOUND_FORWARD_TO` | server | the reply relay: the Resend webhook's signing secret, and the hidden inbox replies are forwarded to (comma-separated) |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 
@@ -223,6 +224,29 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 > This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
 
 ---
+
+## Replies to emails (the hidden relay)
+
+Every email comes from `EMAIL_FROM` (`safety@901safety.com`). Replies are relayed so the team's
+own inbox never shows:
+
+1. Someone answers an invitation or a sign-in email → Resend receives it for 901safety.com and
+   calls [`/api/inbound-email`](./api/inbound-email.ts) (`email.received`, signature checked).
+2. It is forwarded to `INBOUND_FORWARD_TO`, from `EMAIL_FROM`, with the sender's details on top and
+   a reply-to of `reply+<message id>@901safety.com`.
+3. The team just hits Reply. The answer arrives at that reply+ address and goes back to the
+   original sender from `EMAIL_FROM`, threaded under their message. Any copy of the team's
+   address in the quoted text is replaced first.
+
+Only an `INBOUND_FORWARD_TO` sender can answer through a reply+ address, and only to the person
+who wrote that message. Mail from 901safety.com itself and automatic replies are dropped, so
+nothing loops. A failed send answers 502 and Resend retries.
+
+**Setup:** in Resend, turn on receiving for 901safety.com and add the MX record it shows to the
+domain's DNS (GoDaddy). Add a webhook for `email.received` → `https://www.901safety.com/api/inbound-email`
+and put its signing secret in `RESEND_WEBHOOK_SECRET`. Set `INBOUND_FORWARD_TO`, leave
+`EMAIL_REPLY_TO` empty, and redeploy. The Resend API key must have full access, because the relay
+reads received mail.
 
 ## Wall display (`/tv`)
 
