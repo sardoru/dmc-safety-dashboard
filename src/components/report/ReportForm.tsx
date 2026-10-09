@@ -245,7 +245,7 @@ export default function ReportForm({ draft, setDraft, profile, onReview }: Repor
             <Field label="What happened" hint="Plain words are best: what you saw, what was taken or damaged, whether there’s camera footage.">
               {(id) => (
                 <div>
-                  <Textarea id={id} rows={5} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="e.g. A man in a gray hoodie was pulling on car door handles along 2nd St, then walked south toward Peabody Place." />
+                  <Textarea id={id} rows={5} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="e.g. A man in a gray hoodie was pulling on car door handles along S Main St, then walked north toward Beale Street." />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {!isDemo && (
                       <Button

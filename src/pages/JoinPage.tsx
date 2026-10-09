@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CircleCheck, Hand, Mail, Send, Ticket } from 'lucide-react';
+import { ArrowLeft, CircleCheck, CirclePlay, Hand, Mail, Send, Ticket } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { apiFetch } from '../lib/api';
@@ -8,6 +8,8 @@ import Logo from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
 import { Button } from '../components/ui/Button';
 import { Banner } from '../components/ui/Feedback';
+import { JOIN_FILM_DURATION } from '../film/filmMeta';
+import { formatTime } from '../film/time';
 
 type Step = 'code' | 'request' | 'sent' | 'requested';
 
@@ -209,6 +211,15 @@ export default function JoinPage() {
                       </Link>
                       .
                     </span>
+                  </p>
+                )}
+                {JOIN_FILM_DURATION > 0 && (
+                  <p className="mt-3 flex gap-2.5">
+                    <CirclePlay className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-strong" />
+                    {/* A plain link: the film is its own page (how-to-join.html), not a route of this app. */}
+                    <a href="/how-to-join" className="font-semibold text-accent-strong hover:underline">
+                      Watch how to join · {formatTime(JOIN_FILM_DURATION)}
+                    </a>
                   </p>
                 )}
               </div>
