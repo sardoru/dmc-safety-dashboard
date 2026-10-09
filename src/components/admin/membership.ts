@@ -172,7 +172,7 @@ export function demoCodes(now: number): AccessCode[] {
       createdAt: now - 2 * 86_400_000,
       redemptions: [
         { id: 'r1', email: 'dana@riverbluff.example', outcome: 'invited', joined: true, createdAt: now - 26 * 3_600_000 },
-        { id: 'r2', email: 'luis@gayosomarket.example', outcome: 'invited', joined: true, createdAt: now - 20 * 3_600_000 },
+        { id: 'r2', email: 'luis@ortegasmarket.example', outcome: 'invited', joined: true, createdAt: now - 20 * 3_600_000 },
         { id: 'r3', email: 'orders@frontstreetdeli.example', outcome: 'invited', joined: false, createdAt: now - 3 * 3_600_000 },
       ],
     },
