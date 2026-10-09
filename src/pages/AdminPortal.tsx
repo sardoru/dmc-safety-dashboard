@@ -111,7 +111,7 @@ export default function AdminPortal() {
       <PageHeader
         eyebrow="Administration"
         title="Team, access & system"
-        description="Invite officers, hand out access codes, approve requests to join, review member businesses and check every integration."
+        description="Invite businesses, officers and administrators, hand out access codes, approve requests to join, review member businesses and check every integration."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

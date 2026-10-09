@@ -28,7 +28,8 @@ interface AuthEmailOpts {
 
 /**
  * A polished, email-client-safe (table + inline-CSS) branded message in the
- * navy/gold identity. Used for magic links and officer invitations.
+ * navy/gold identity. Used for sign-in, passkey-setup and account emails;
+ * invitations have their own role-specific layout (invitations.ts).
  */
 export function brandedAuthEmail(opts: AuthEmailOpts): BrandedEmail {
   const { heading, preview, intro, buttonLabel, url, footnote, subject } = opts;
@@ -144,7 +145,7 @@ export async function sendEmail(to: string, email: BrandedEmail): Promise<void> 
   if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Email send failed');
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

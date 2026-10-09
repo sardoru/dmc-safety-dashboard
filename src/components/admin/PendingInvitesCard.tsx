@@ -10,7 +10,7 @@ import { ROLE_LABEL } from '../layout/nav';
 import { Button } from '../ui/Button';
 import { Card, CardHeader } from '../ui/Card';
 import ListSkeleton from './ListSkeleton';
-import { staffRoleNoun, type PendingInvite } from './team';
+import { roleNoun, type PendingInvite } from './team';
 
 interface PendingInvitesCardProps {
   invites: PendingInvite[];
@@ -43,7 +43,10 @@ export default function PendingInvitesCard({ invites, loading, isDemo, onRevoked
       onRevoked(invite.id);
       push({
         title: 'Invitation revoked',
-        body: `${invite.email} won’t be made ${staffRoleNoun(invite.role)} when they sign in.`,
+        body:
+          invite.role === 'business'
+            ? `${invite.email} can no longer join with this invitation.`
+            : `${invite.email} won’t be made ${roleNoun(invite.role)} when they sign in.`,
         tone: 'success',
       });
     } catch (err) {

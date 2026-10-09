@@ -38,7 +38,11 @@ interface Snapshot {
 const NO_MEMBERS: TeamMember[] = [];
 const NO_INVITES: PendingInvite[] = [];
 
-/** Officers, administrators and pending invites — Supabase when connected, a sample team in demo mode. */
+/**
+ * Officers, administrators and pending invites of every role (businesses
+ * included, each labelled with its own role) — Supabase when connected, a
+ * sample team in demo mode.
+ */
 export function useTeam(): TeamState {
   const { isDemo } = useAuth();
   const now = useNow();

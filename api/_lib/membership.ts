@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthedUser } from './auth.js';
+import type { AuthedUser, Role } from './auth.js';
 
 /** Canonical origin for links in emails (https://www.901safety.com in production). */
 export function siteUrl(): string {
@@ -74,8 +74,28 @@ export function clientIp(headers: Record<string, string | string[] | undefined>)
   return first || 'unknown';
 }
 
-export const ROLE_LABEL: Record<string, string> = {
-  business: 'member business',
-  officer: 'public-safety officer',
-  admin: 'administrator',
-};
+/** Higher outranks lower. Invitations, access codes and approvals only ever raise a role. */
+export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, admin: 3 };
+
+export function parseRole(value: unknown): Role | null {
+  return value === 'business' || value === 'officer' || value === 'admin' ? value : null;
+}
+
+/** A role from the database; anything unexpected is treated as the least-privileged one. */
+export function roleOf(value: unknown): Role {
+  return parseRole(value) ?? 'business';
+}
+
+/**
+ * The acting admin's name for "… invited you" lines, or null when they haven't
+ * set one (the sign-up default is their email's local part, which reads badly).
+ */
+export async function inviterName(admin: SupabaseClient, actor: AuthedUser): Promise<string | null> {
+  const { data } = await admin.from('profiles').select('display_name, email').eq('id', actor.id).maybeSingle();
+  const name = String(data?.display_name ?? '')
+    .replace(/[\p{Cc}\s]+/gu, ' ')
+    .trim()
+    .slice(0, 80);
+  const local = String(data?.email ?? actor.email ?? '').split('@')[0].toLowerCase();
+  return name && name.toLowerCase() !== local ? name : null;
+}

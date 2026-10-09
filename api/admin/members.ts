@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireRole } from '../_lib/auth.js';
+import { requireRole, type Role } from '../_lib/auth.js';
 import { getAdmin } from '../_lib/supabaseAdmin.js';
 import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
+import { invitationEmail, type InviteAccount } from '../_lib/invitations.js';
 import { methodNotAllowed, readBody, sendError, sendJson } from '../_lib/http.js';
-import { accountExists, audit, ROLE_LABEL, signInLink } from '../_lib/membership.js';
+import { accountExists, audit, inviterName, ROLE_RANK, roleOf, signInLink } from '../_lib/membership.js';
 import { hashDisplayKey, newDisplayKey } from '../_lib/displays.js';
 
 /**
@@ -17,7 +18,6 @@ import { hashDisplayKey, newDisplayKey } from '../_lib/displays.js';
  *   { action: 'displays.revoke', id }          → stop a display link at once
  * Codes, settings and dismissals go through RLS-checked database calls instead.
  */
-const RANK: Record<string, number> = { business: 1, officer: 2, admin: 3 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -39,11 +39,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (w.status !== 'pending') return sendError(res, 409, 'That request was already handled');
         const email = String(w.email).toLowerCase();
 
+        // Never lower anyone: the email speaks to the role they end up with.
         const existing = await accountExists(admin, email);
+        let joinsAs: Role = role;
+        let account: InviteAccount = 'new';
         if (existing) {
+          account = 'existing';
           const { data: p } = await admin.from('profiles').select('id, role').eq('email', email).maybeSingle();
-          if (p && (RANK[role] ?? 0) > (RANK[p.role as string] ?? 0)) {
-            await admin.from('profiles').update({ role }).eq('id', p.id);
+          if (p && ROLE_RANK[role] > ROLE_RANK[roleOf(p.role)]) {
+            const { error } = await admin.from('profiles').update({ role }).eq('id', p.id);
+            if (error) throw new Error(error.message);
+            account = 'raised';
+          } else if (p) {
+            joinsAs = roleOf(p.role);
           }
         } else {
           const { data: pending } = await admin
@@ -53,8 +61,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .eq('email', email)
             .maybeSingle();
           if (pending) {
-            if ((RANK[role] ?? 0) > (RANK[pending.role as string] ?? 0)) {
+            if (ROLE_RANK[role] > ROLE_RANK[roleOf(pending.role)]) {
               await admin.from('officer_invites').update({ role, source: 'waitlist' }).eq('id', pending.id);
+            } else {
+              joinsAs = roleOf(pending.role);
             }
           } else {
             const { error } = await admin
@@ -65,18 +75,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const url = await signInLink(admin, email, existing);
-        await sendEmail(
-          email,
-          brandedAuthEmail({
-            subject: 'You’re in — Core Downtown Memphis Safety Dashboard',
-            heading: 'Your request is approved',
-            preview: 'You can now join the Downtown safety network.',
-            intro: `Thanks for asking to join. You’re approved as a ${ROLE_LABEL[role]}. Tap below to ${existing ? 'sign in' : 'finish joining'} — no password needed.`,
-            buttonLabel: existing ? 'Sign in' : 'Finish joining',
-            url,
-            footnote: `This link is for ${email}.`,
-          }),
-        );
+        const who = await inviterName(admin, actor);
+        await sendEmail(email, invitationEmail({ role: joinsAs, source: 'request', account, email, url, inviterName: who }));
         await admin
           .from('waitlist')
           .update({ status: 'approved', role, decided_by: actor.id, decided_at: new Date().toISOString() })

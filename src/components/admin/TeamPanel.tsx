@@ -1,4 +1,4 @@
-import InviteOfficerCard from './InviteOfficerCard';
+import InviteCard from './InviteCard';
 import PendingInvitesCard from './PendingInvitesCard';
 import TeamMembersCard from './TeamMembersCard';
 import type { TeamState } from './useTeam';
@@ -15,7 +15,7 @@ export default function TeamPanel({ team, isDemo, currentUserId, currentEmail }:
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <div className="min-w-0 space-y-5">
-        <InviteOfficerCard
+        <InviteCard
           isDemo={isDemo}
           members={team.members}
           invites={team.invites}

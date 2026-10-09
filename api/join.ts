@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAdmin } from './_lib/supabaseAdmin.js';
-import { brandedAuthEmail, sendEmail } from './_lib/emails.js';
+import { sendEmail } from './_lib/emails.js';
+import { invitationEmail, type InviteAccount } from './_lib/invitations.js';
 import { methodNotAllowed, readBody, sendError, sendJson } from './_lib/http.js';
-import { clientIp, limiter, normalizeEmail, ROLE_LABEL, signInLink } from './_lib/membership.js';
+import { clientIp, limiter, normalizeEmail, roleOf, signInLink } from './_lib/membership.js';
 
 /**
  * Public membership entrance (no sign-in):
@@ -52,33 +53,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!r?.ok) return sendError(res, 400, CODE_ERRORS[r?.error ?? ''] ?? CODE_ERRORS.invalid_code);
 
     try {
-      const url = await signInLink(admin, email, Boolean(r.existing));
-      const role = ROLE_LABEL[r.role ?? 'business'] ?? 'member';
-      await sendEmail(
-        email,
-        r.existing
-          ? brandedAuthEmail({
-              subject: 'Your access to the Core Downtown Memphis Safety Dashboard',
-              heading: 'Your access is ready',
-              preview: 'Sign in to the Core Downtown Memphis Safety Dashboard.',
-              intro:
-                r.outcome === 'upgraded'
-                  ? `Your access code made you a ${role}. Sign in to start.`
-                  : 'Your access code is applied to your account. Sign in to continue.',
-              buttonLabel: 'Sign in',
-              url,
-              footnote: `This link signs you in as ${email}.`,
-            })
-          : brandedAuthEmail({
-              subject: 'Finish joining the Core Downtown Memphis Safety Dashboard',
-              heading: 'Welcome to the network',
-              preview: 'One tap to finish joining the Downtown safety network.',
-              intro: `Your access code is accepted. You’ll join as a ${role}. Tap below to finish — no password needed.`,
-              buttonLabel: 'Finish joining',
-              url,
-              footnote: `This link is for ${email}.`,
-            }),
-      );
+      const existing = Boolean(r.existing);
+      const url = await signInLink(admin, email, existing);
+      // A new address joins with the code's role; an existing account was
+      // raised to it, or keeps its own (equal or higher) role.
+      let role = roleOf(r.role);
+      let account: InviteAccount = 'new';
+      if (existing && r.outcome === 'upgraded') {
+        account = 'raised';
+      } else if (existing) {
+        account = 'existing';
+        const { data: p } = await admin.from('profiles').select('role').eq('email', email).maybeSingle();
+        if (p) role = roleOf(p.role);
+      }
+      await sendEmail(email, invitationEmail({ role, source: 'code', account, email, url, code }));
     } catch (err) {
       console.error('[join] email failed', err);
       return sendError(res, 502, 'Your seat is saved, but the email didn’t send — try again in a minute.');

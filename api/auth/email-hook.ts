@@ -1,7 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
+import type { Role } from '../_lib/auth.js';
 import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
+import { invitationEmail } from '../_lib/invitations.js';
 import { sendError, sendJson } from '../_lib/http.js';
+import { roleOf } from '../_lib/membership.js';
+import { getAdmin } from '../_lib/supabaseAdmin.js';
 
 // Supabase delivers the raw request body; we must verify the signature over the
 // exact bytes, so readRawBody() consumes the stream before touching req.body.
@@ -51,7 +55,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data.token_hash,
   )}&type=${encodeURIComponent(data.email_action_type)}`;
 
-  const email_built = buildEmail(data.email_action_type, email, url);
+  // Invitations Supabase sends itself (e.g. "Invite user" in its dashboard) get
+  // the same role-specific email as ours; everything else is a sign-in email.
+  const email_built =
+    data.email_action_type === 'invite'
+      ? invitationEmail({ role: await invitedRole(email), source: 'admin', account: 'new', email, url })
+      : buildEmail(data.email_action_type, email, url);
 
   try {
     await sendEmail(email, email_built);
@@ -73,17 +82,6 @@ function buildEmail(actionType: string, email: string, url: string) {
         intro: 'Use the button below to reset access to your Core Downtown Memphis Safety Dashboard account.',
         buttonLabel: 'Reset access',
         url,
-      });
-    case 'invite':
-      return brandedAuthEmail({
-        subject: 'You’re invited to the Core Downtown Memphis Safety Dashboard',
-        heading: 'You’ve been invited',
-        preview: 'Accept your invitation to the Core Downtown Memphis Safety Dashboard.',
-        intro:
-          'You’ve been invited to join the Core Downtown Memphis Safety Dashboard. Accept your invitation to get started.',
-        buttonLabel: 'Accept invitation',
-        url,
-        footnote: `This invitation is for ${email}.`,
       });
     case 'email_change':
       return brandedAuthEmail({
@@ -108,6 +106,29 @@ function buildEmail(actionType: string, email: string, url: string) {
         url,
         footnote: `This link signs you in as ${email}.`,
       });
+  }
+}
+
+/**
+ * The role a Supabase-sent invitation carries: the address's open invite, or
+ * the one the sign-up trigger claimed moments ago. Without one, a new account
+ * is a member business — so is any lookup failure.
+ */
+async function invitedRole(email: string): Promise<Role> {
+  try {
+    const { data } = await getAdmin()
+      .from('officer_invites')
+      .select('role, status, claimed_at')
+      .eq('email', email.toLowerCase())
+      .in('status', ['pending', 'claimed'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+    const fresh = (data ?? []).find(
+      (r) => r.status === 'pending' || (r.claimed_at && Date.now() - Date.parse(String(r.claimed_at)) < 10 * 60_000),
+    );
+    return roleOf(fresh?.role);
+  } catch {
+    return 'business';
   }
 }
 

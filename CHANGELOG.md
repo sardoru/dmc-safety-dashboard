@@ -3,6 +3,57 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.4] — 2026-10-09 — Role-specific invitation emails
+
+### Added
+- **Invitation emails written for the role.** Member businesses, Public Safety officers and
+  administrators each get their own email: what they're joining (a self-regulated safety
+  dashboard for the core of Downtown Memphis — businesses report what they see, public-safety
+  officers respond, the block stays in the loop), who invited them and as what, what that role
+  can do in the app's own words, numbered first steps, safety (911 first, never approach) and
+  privacy, how sign-in works, and the three films — "How to join and take part", "How to report
+  an incident" and "How the Safety Dashboard works" — ordered for the role, with chapter links
+  (`?t=`) to the parts that matter (businesses: reporting and the Lookout board; officers: the
+  Ops Center, the district map, triage, spoken alerts; administrators: Manage the team).
+- One builder, `api/_lib/invitations.ts`, for every way in: an administrator's invite, an access
+  code, an approved request to join, and invitations Supabase sends itself (the email hook reads
+  the invited role). New addresses get **Accept your invitation** / **Finish joining**; existing
+  accounts get **Sign in to the dashboard** with a "You're now …" or "Your access is ready"
+  version.
+- The film list in one place, `api/_lib/films.ts` (titles, lengths, chapter starts, posters);
+  "How to join and take part" is linked as "about 3 min" until its cut lands
+  (`HOW_TO_JOIN_LENGTH`).
+- Admin → Team → **Invite someone**: invite a **member business**, a Public Safety officer or an
+  administrator, with a hint for each role. The picker starts on the least access.
+- Email craft: tables and inline styles for Gmail, Outlook and Apple Mail; a full-width button
+  and smaller film stills on phones; dark-mode colours where the client supports them; readable
+  with images off (film stills carry alt text); a plain-text part; ~35 KB, well under Gmail's
+  clipping limit.
+- `scripts/email-previews.ts` writes every variant as HTML + text to look at in a browser.
+
+### Changed
+- `/api/officers/invite` accepts `business` as well as `officer` and `admin`, rejects an unknown
+  role (no role still means officer), and **never lowers an existing account**: someone who
+  already has the role or a higher one keeps it (`status: "unchanged"`) and gets the guide for the
+  role they have. Before, an invitation set the role outright — inviting an administrator as an
+  officer demoted them.
+- Approving a request to join, or redeeming a code, with an existing account sends the guide for
+  the role the account ends up with (it keeps a higher one).
+- A failed role update or invite record now stops the request before an email promises access.
+
+### Fixed
+- Admin → Team → **Pending invites** labelled business invitations "Public Safety", and revoking
+  one said they "won't be made a Public Safety officer".
+- Invited administrators with an existing account were told "You're now a Public Safety officer".
+
+### Verified
+- API harness 152/152 (42 new: every role × way in × account — 54 emails — has no AI, vendor or
+  "person" wording, links all three films and the sign-in link, says 911 first and how long the
+  link lasts, escapes names, stays small; role-specific subjects, headings, buttons and chapter
+  links; business invites through the admin API; the never-lower rule; Supabase-sent invitations;
+  the film list matches the film pages).
+- Screenshots of all 15 variants at 600 px and 375 px, plus desktop, dark mode and images off.
+
 ## [0.4.3] — 2026-10-09 — Wall display for the office TV
 
 ### Added
