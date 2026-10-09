@@ -16,7 +16,7 @@ publish be-on-the-lookout notices, and **hear new reports read aloud**.
 | --- | --- |
 | **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: **Report by voice** (an automated two-way interview — they just talk), a **guided form** that can read its questions aloud and organise dictated notes ("Organize my notes"), or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a spoken read-back confirmation. |
 | **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and a spoken **shift briefing** summarised from the last hours. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
-| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (officer invites, team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
+| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (**role-specific invitations** for businesses, officers and administrators, team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
 | **The public** | A **live map at [`/live`](https://www.901safety.com/live)** of what's been reported downtown — the type, priority, status and an approximate spot of community reports, never details or people — and **[`/join`](https://www.901safety.com/join)**, where a business or officer joins with an access code (or asks to join while sign-up is invite-only). |
 
 The app is fully responsive (phone bottom-tab layout with a centre **Report** button; desktop
@@ -280,20 +280,49 @@ How they're wired:
 - The share cards come from `node scripts/og-images.mjs` (`--only how-to-report` or
   `--only how-to-join` for just that one).
 
+## Invitation emails
+
+Every way in sends one invitation, written for the role — built by
+[`api/_lib/invitations.ts`](./api/_lib/invitations.ts): an administrator's invite (Admin → Team →
+**Invite someone**: a member business, a Public Safety officer or an administrator), an access code
+(`/join`), an approved request to join, and invitations Supabase sends itself (the Send Email hook
+looks up the invited role).
+
+- **What's in it:** what they're joining (a self-regulated safety dashboard for the core of
+  Downtown Memphis), who invited them and as what, what that role can do (in the app's own
+  labels), numbered first steps, 911-first and privacy notes, how sign-in works (a one-time link
+  now; `/login` or a passkey later) and the three films, ordered for the role, with chapter links
+  (`?t=<seconds>`) to the parts that matter to it.
+- **New or existing account:** a new address gets **Accept your invitation** (or **Finish joining**
+  for codes and approved requests); an existing account gets **Sign in to the dashboard** — "You're
+  now a Public Safety officer" when its role went up, the guide for the role it keeps when it
+  didn't; an account that has never signed in gets the invitation again. An invitation never
+  lowers a role — an account's or an open invitation's.
+- **Films:** one list in [`api/_lib/films.ts`](./api/_lib/films.ts) — titles, lengths, chapter
+  starts, posters. The harness checks all three against the film pages' generated data, so a
+  re-cut that moves a chapter fails the tests until this list follows.
+- **Craft:** tables + inline styles for Gmail, Outlook and Apple Mail, phone and dark-mode
+  refinements, readable with images off, a plain-text part, ~35 KB.
+- **Wording:** `npm run test:api` renders every role × way in × account and fails on AI or vendor
+  wording, or an interviewer described as a person.
+- **Preview:** `npx tsx scripts/email-previews.ts [dir]` writes every variant as HTML + text
+  (default `/tmp/dmc-invite-emails/html`, with an `index.html`) — nothing is sent.
+
 ---
 
 ## Project structure
 
 ```
 api/
-  _lib/              auth, Supabase admin, http, OpenAI + ElevenLabs clients, incident vocabulary
+  _lib/              auth, Supabase admin, http, OpenAI + ElevenLabs clients, incident vocabulary,
+                     invitation emails (invitations.ts) and the film list (films.ts)
   voice-session.ts   voice line: ElevenLabs agent token + caller context (GPT-Live fallback)
   live-session.ts    GPT-Live interviewer — the fallback line
   tts.ts             ElevenLabs Eleven v4 speech + voice list
   briefing.ts        AI shift briefing
   reports/extract.ts text → structured report draft
   transcribe.ts      dictation
-  auth/ officers/ passkeys/   email hook, officer invites, WebAuthn
+  auth/ officers/ passkeys/   email hook, invitations (any role), WebAuthn
   join.ts            public: redeem an access code, ask to join
   admin/members.ts   admin: approve requests, a member's passkeys, setup links
 src/
@@ -305,7 +334,8 @@ src/
   lib/               taxonomy, live (GPT-Live client), speech (ElevenLabs + fallback),
                      announce (spoken copy), schema detection, media, geo, format
   data/demo.ts       demo-mode dataset
-scripts/api-harness.ts   mocked-upstream tests for the voice and AI endpoints
+scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership endpoints + every invitation email
+scripts/email-previews.ts  every invitation email as HTML + text, to look at without sending
 scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
 ```
@@ -323,6 +353,10 @@ supabase/migrations/     schema + RLS
 - Access codes are meant to be shared, so redeeming one never signs anyone in — it claims a
   seat and emails a link to the address, which proves it. A leaked code can only burn seats
   (revoke it); it can't raise anyone's role beyond the code's, or lower one.
+- Only administrators send invitations, and an invitation never lowers a role: an existing
+  account — or an open invitation — is raised to the invited role or keeps its own (removing
+  officer access is a separate, confirmed action in Team). A failed lookup or write stops before
+  any email is sent.
 - The public map (`/live`) reads only `public_incidents()`: community reports, type, priority,
   status and a position rounded to about 100 m — no text, people, vehicles, photos, reporter or
   address. Officers-only and dismissed reports never appear; admins can pause it or delay it.

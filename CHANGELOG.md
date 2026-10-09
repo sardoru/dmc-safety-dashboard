@@ -3,6 +3,67 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.5] — 2026-10-09 — Role-specific invitation emails
+
+### Added
+- **Invitation emails written for the role.** Member businesses, Public Safety officers and
+  administrators each get their own email: what they're joining (a self-regulated safety
+  dashboard for the core of Downtown Memphis — businesses report what they see, public-safety
+  officers respond, the block stays in the loop), who invited them and as what, what that role
+  can do in the app's own words, numbered first steps, safety (911 first, never approach) and
+  privacy, how sign-in works, and the three films — "How to join and take part", "How to report
+  an incident" and "How the Safety Dashboard works" — ordered for the role, with chapter links
+  (`?t=`) to the parts that matter (businesses: reporting and the Lookout board; officers: the
+  Ops Center, the district map, triage, spoken alerts; administrators: Manage the team).
+- One builder, `api/_lib/invitations.ts`, for every way in: an administrator's invite, an access
+  code, an approved request to join, and invitations Supabase sends itself (the email hook reads
+  the invited role). New addresses get **Accept your invitation** / **Finish joining**; existing
+  accounts get **Sign in to the dashboard** with a "You're now …" or "Your access is ready"
+  version.
+- The film list in one place, `api/_lib/films.ts` (titles, lengths, chapter starts, posters),
+  all three checked against the film pages — "How to join and take part" (3:08) included, with
+  chapter links for each role.
+- Admin → Team → **Invite someone**: invite a **member business**, a Public Safety officer or an
+  administrator, with a hint for each role. The picker starts on the least access.
+- Email craft: tables and inline styles for Gmail, Outlook and Apple Mail; a full-width button
+  and smaller film stills on phones; dark-mode colours where the client supports them; readable
+  with images off (film stills carry alt text); a plain-text part; ~35 KB, well under Gmail's
+  clipping limit.
+- `scripts/email-previews.ts` writes every variant as HTML + text to look at in a browser.
+
+### Changed
+- `/api/officers/invite` accepts `business` as well as `officer` and `admin`, and a missing or
+  unknown role is a 400 (it used to default to officer). It **never lowers anyone**: an existing
+  account that already has the role or a higher one keeps it (`status: "unchanged"`) and gets the
+  guide for the role it has; an open invitation is raised in place or kept — no longer deleted and
+  re-made, so a business re-invite can't replace a pending officer invite. Before, an invitation
+  set an account's role outright — inviting an administrator as an officer demoted them.
+- One never-lower rule for every way in (`grantRole` / `standingOf` in `api/_lib/membership.ts`),
+  and every email describes the role the address actually has: an approval or code redemption
+  that keeps a higher role says so; a **repeat** code redemption describes the account as it is
+  now, not what the code did the first time.
+- An account that has never signed in (its first invite unopened) gets the invitation again —
+  "Accept your invitation", "Register your storefront" — not "Already a member".
+- Invitations Supabase sends itself take the role from the profile first (the sign-up trigger
+  has written it by then), then the open invite, then member business.
+- Every lookup and write on these paths is checked: a failure stops the request (5xx) before any
+  email goes out.
+
+### Fixed
+- Admin → Team → **Pending invites** labelled business invitations "Public Safety", and revoking
+  one said they "won't be made a Public Safety officer".
+- Invited administrators with an existing account were told "You're now a Public Safety officer".
+
+### Verified
+- API harness 178/178 (68 new: every role × way in × account — 54 emails — has no AI, vendor or
+  "person" wording, links all three films and the sign-in link, says 911 first and how long the
+  link lasts, escapes names, stays small; role-specific subjects, headings, buttons and chapter
+  links; business invites through the admin API; never-lower for accounts and open invitations;
+  repeat code redemptions; never-signed-in accounts; failed lookups and writes send nothing;
+  Supabase-sent invitations from the profile, a stale invite, the open invite or nothing; the film
+  list matches the film pages).
+- Screenshots of all 15 variants at 600 px and 375 px, plus desktop, dark mode and images off.
+
 ## [0.4.4] — 2026-10-09 — "How to join" film, the sample report on South Main, a new Main Street picture
 
 ### Added

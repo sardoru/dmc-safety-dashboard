@@ -1,101 +1,80 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireRole } from '../_lib/auth.js';
 import { getAdmin } from '../_lib/supabaseAdmin.js';
-import { brandedAuthEmail, sendEmail } from '../_lib/emails.js';
+import { sendEmail } from '../_lib/emails.js';
+import { invitationEmail, type InviteAccount } from '../_lib/invitations.js';
 import { sendError, sendJson, methodNotAllowed, readBody } from '../_lib/http.js';
-import { audit } from '../_lib/membership.js';
+import { audit, grantRole, hasSignedIn, inviterName, normalizeEmail, parseRole, signInLink } from '../_lib/membership.js';
 
+/**
+ * Admin only — invite someone by email as a member business, a Public Safety
+ * officer or an administrator:
+ *
+ *   POST { email, role: 'business' | 'officer' | 'admin' }
+ *   → { status: 'invited' | 'granted' | 'unchanged', role, emailed }
+ *
+ * Never lowers anyone. A new address gets a pending invite — or its open one
+ * is raised (or kept, when it's already higher) — and the invitation email for
+ * the role it carries (`invited`). An existing account is raised right away
+ * (`granted`) or keeps an equal or higher role (`unchanged`); either way it
+ * gets a sign-in link and the guide for the role it has. An account that has
+ * never signed in (its first invite unopened) gets the invitation again
+ * (`invited`). Any failed write stops the request before an email goes out.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
 
   const guard = await requireRole(req, ['admin']);
   if (!guard.ok) return sendError(res, guard.status, guard.error);
 
-  const body = readBody<{ email?: string; role?: string }>(req);
-  const email = body.email?.trim().toLowerCase();
-  const role = body.role === 'admin' ? 'admin' : 'officer';
-  if (!email || !/.+@.+\..+/.test(email)) return sendError(res, 400, 'A valid email is required');
+  const body = readBody<{ email?: unknown; role?: unknown }>(req);
+  const email = normalizeEmail(body.email);
+  if (!email) return sendError(res, 400, 'A valid email is required');
+  const role = parseRole(body.role);
+  if (!role) return sendError(res, 400, 'Choose a role: business, officer or admin');
 
-  const site = (process.env.SITE_URL || '').replace(/\/$/, '');
   const admin = getAdmin();
 
-  // Does this person already have an account?
-  const { data: existing } = await admin
-    .from('profiles')
-    .select('id, role')
-    .eq('email', email)
-    .maybeSingle();
-
   try {
-    if (existing) {
-      // Grant the role immediately and record the (already-claimed) invite.
-      await admin.from('profiles').update({ role }).eq('id', existing.id);
-      await audit(admin, guard.user, 'member.role_granted', email, { from: existing.role, to: role });
-      await admin.from('officer_invites').delete().eq('email', email).eq('status', 'pending');
-      await admin.from('officer_invites').insert({
+    const who = await inviterName(admin, guard.user);
+    const grant = await grantRole(admin, email, role, { source: 'admin', invitedBy: guard.user.id });
+
+    if (grant.raisedFrom) {
+      await audit(admin, guard.user, 'member.role_granted', email, { from: grant.raisedFrom, to: grant.role });
+      // Record the (already-claimed) invite.
+      const { error: clearError } = await admin.from('officer_invites').delete().eq('email', email).eq('status', 'pending');
+      if (clearError) throw new Error(clearError.message);
+      const { error: recordError } = await admin.from('officer_invites').insert({
         email,
-        role,
+        role: grant.role,
         status: 'claimed',
         invited_by: guard.user.id,
         claimed_at: new Date().toISOString(),
       });
+      if (recordError) throw new Error(recordError.message);
+    }
 
-      const { data: link, error } = await admin.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
+    const existing = grant.accountId !== null;
+    const firstTime = grant.accountId === null || !(await hasSignedIn(admin, grant.accountId));
+    const account: InviteAccount = firstTime ? 'new' : grant.raisedFrom ? 'raised' : 'existing';
+    const status = firstTime ? 'invited' : grant.raisedFrom ? 'granted' : 'unchanged';
+
+    let url: string;
+    try {
+      url = await signInLink(admin, email, existing);
+    } catch (err) {
+      if (existing) return sendJson(res, 200, { status, role: grant.role, emailed: false });
+      return sendError(res, 502, err instanceof Error ? err.message : 'Could not generate invitation link');
+    }
+    await sendEmail(email, invitationEmail({ role: grant.role, source: 'admin', account, email, url, inviterName: who }));
+    if (!grant.raisedFrom) {
+      await audit(admin, guard.user, 'invite.sent', email, {
+        role: grant.role,
+        ...(existing ? { existing: true } : {}),
+        ...(grant.role !== role ? { requested: role } : {}),
       });
-      if (error || !link?.properties?.hashed_token) {
-        return sendJson(res, 200, { status: 'granted', emailed: false });
-      }
-      const url = `${site}/auth/callback?token_hash=${encodeURIComponent(
-        link.properties.hashed_token,
-      )}&type=magiclink`;
-      await sendEmail(
-        email,
-        brandedAuthEmail({
-          subject: 'Your Public Safety officer access is ready',
-          heading: 'You’re now a Public Safety officer',
-          preview: 'Officer access to the Core Downtown Memphis Safety Dashboard has been granted.',
-          intro: `You’ve been granted ${role === 'admin' ? 'administrator' : 'officer'} access to the Core Downtown Memphis Safety Dashboard. Sign in to start filing reports.`,
-          buttonLabel: 'Sign in',
-          url,
-          footnote: `Access granted for ${email}.`,
-        }),
-      );
-      return sendJson(res, 200, { status: 'granted', emailed: true });
     }
-
-    // New invitee: record pending invite, then create the user via an invite
-    // link (the handle_new_user trigger claims the invite and sets the role).
-    await admin.from('officer_invites').delete().eq('email', email).eq('status', 'pending');
-    await admin.from('officer_invites').insert({
-      email,
-      role,
-      status: 'pending',
-      invited_by: guard.user.id,
-    });
-
-    const { data: link, error } = await admin.auth.admin.generateLink({ type: 'invite', email });
-    if (error || !link?.properties?.hashed_token) {
-      return sendError(res, 502, error?.message || 'Could not generate invitation link');
-    }
-    const url = `${site}/auth/callback?token_hash=${encodeURIComponent(
-      link.properties.hashed_token,
-    )}&type=invite`;
-    await sendEmail(
-      email,
-      brandedAuthEmail({
-        subject: 'You’re invited to the Core Downtown Memphis Safety Dashboard',
-        heading: 'You’ve been invited',
-        preview: 'Accept your Public Safety officer invitation.',
-        intro: `You have been invited to join the Core Downtown Memphis Safety Dashboard as ${role === 'admin' ? 'an administrator' : 'a safety officer'}. Accept to set up your account.`,
-        buttonLabel: 'Accept invitation',
-        url,
-        footnote: `This invitation is for ${email}.`,
-      }),
-    );
-    await audit(admin, guard.user, 'invite.sent', email, { role });
-    return sendJson(res, 200, { status: 'invited', emailed: true });
+    return sendJson(res, 200, { status, role: grant.role, emailed: true });
   } catch (err) {
     return sendError(res, 500, err instanceof Error ? err.message : 'Could not send invitation');
   }

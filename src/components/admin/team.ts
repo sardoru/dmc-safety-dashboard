@@ -12,11 +12,11 @@ export interface TeamMember {
   joinedAt: number | null;
 }
 
-/** A pending `officer_invites` row. */
+/** A pending `officer_invites` row — any role: admins, access codes and approved requests all create them. */
 export interface PendingInvite {
   id: string;
   email: string;
-  role: StaffRole;
+  role: Role;
   invitedAt: number;
 }
 
@@ -42,6 +42,21 @@ function toStaffRole(role: string): StaffRole {
   return role === 'admin' ? 'admin' : 'officer';
 }
 
+/** Any role from the database; an unexpected value is shown as the least-privileged one. */
+function toRole(role: string): Role {
+  return role === 'admin' || role === 'officer' ? role : 'business';
+}
+
+/** Higher outranks lower. Invitations only ever raise a role. */
+export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, admin: 3 };
+
+/** The roles an admin can invite, least access first. */
+export const INVITE_ROLES: { value: Role; label: string }[] = [
+  { value: 'business', label: 'Member business' },
+  { value: 'officer', label: 'Public Safety officer' },
+  { value: 'admin', label: 'Administrator' },
+];
+
 function toTime(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
@@ -59,7 +74,7 @@ export function rowToMember(row: MemberRow): TeamMember {
 }
 
 export function rowToInvite(row: InviteRow): PendingInvite {
-  return { id: row.id, email: row.email, role: toStaffRole(row.role), invitedAt: toTime(row.created_at) ?? 0 };
+  return { id: row.id, email: row.email, role: toRole(row.role), invitedAt: toTime(row.created_at) ?? 0 };
 }
 
 export function memberName(m: Pick<TeamMember, 'displayName' | 'email'>): string {
@@ -73,13 +88,15 @@ export function sortMembers(list: TeamMember[]): TeamMember[] {
   );
 }
 
-export function staffRoleNoun(role: StaffRole): string {
-  return role === 'admin' ? 'an administrator' : 'a Public Safety officer';
+export function roleNoun(role: Role): string {
+  return role === 'admin' ? 'an administrator' : role === 'officer' ? 'a Public Safety officer' : 'a member business';
 }
 
-export const STAFF_ROLE_HINT: Record<StaffRole, string> = {
-  officer: 'Monitors and works reports, the lookout board and insights.',
-  admin: 'Everything an officer can do, plus managing the team and system settings.',
+/** What each role gets — shown under the role picker. */
+export const ROLE_HINT: Record<Role, string> = {
+  business: 'Reports incidents, follows their reports, and gets nearby alerts and the Lookout board.',
+  officer: 'Works every report in the Operations Center, plus the Lookout board and Insights.',
+  admin: 'Everything an officer can do, plus Team, Access, Businesses, Activity and System.',
 };
 
 /** Demo mode: the sample team (the demo personas plus one more officer). */
@@ -110,5 +127,8 @@ export function demoTeam(now: number): TeamMember[] {
 }
 
 export function demoInvites(now: number): PendingInvite[] {
-  return [{ id: 'demo-invite-1', email: 'a.nguyen@downtownsafety.example', role: 'officer', invitedAt: now - 26 * HOUR }];
+  return [
+    { id: 'demo-invite-2', email: 'hello@southmainbooks.example', role: 'business', invitedAt: now - 3 * HOUR },
+    { id: 'demo-invite-1', email: 'a.nguyen@downtownsafety.example', role: 'officer', invitedAt: now - 26 * HOUR },
+  ];
 }
