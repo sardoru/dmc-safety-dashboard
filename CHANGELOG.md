@@ -21,6 +21,8 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 ### Changed
 - The film page is shared: `FilmPage` takes the film and its words as props, each film page is
   its own small entry, and `scripts/film-data.mjs --film <id>` brings in either film.
+- The voice screen's call line names the voice (`voice "George"`) instead of the engine
+  ("Eleven v4"), so no vendor wording shows to callers.
 
 ## [0.4.1] — 2026-10-09 — Voice interviews in an Eleven v4 voice
 
