@@ -113,7 +113,9 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   officer-only, and lets members edit only their display name), then
   [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql)
   (access codes and their seats, invite-only sign-up, requests to join, the audit log, app
-  settings, and `public_incidents()` — the sanitized feed behind `/live`).
+  settings, and `public_incidents()` — the sanitized feed behind `/live`), then
+  [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql) (the wall displays'
+  private links: a hash of each key, server-only).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -134,8 +136,9 @@ writing reports in the original format, so deploying the new UI before migrating
    [`0001_init.sql`](./supabase/migrations/0001_init.sql), then
    [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql), then
    [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql), then
-   [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql)
-   into the SQL editor. `0002`–`0004` are idempotent and keep existing data.
+   [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql), then
+   [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql)
+   into the SQL editor. `0002`–`0005` are idempotent and keep existing data.
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 5. **Auth → Hooks → Before User Created** → Postgres function
@@ -218,6 +221,24 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 > This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
 
 ---
+
+## Wall display (`/tv`)
+
+A full-screen page for a TV on an office wall: the live map and the latest reports, the counts
+(new · open · P1–P2 open · last 24 h · lookouts) and a clock. It refreshes every 15 seconds, keeps
+the screen awake where the browser allows it, hides the cursor and scales from a 1080p TV to 4K.
+
+- **Get a link:** Admin → Access → *Wall displays* → *New link* → name it ("Office wall") → *Copy
+  link*. The link is `https://www.901safety.com/tv#key=…`; open it in the TV's browser and press
+  *Full screen*. The key rides after `#`, so it never reaches server logs or `Referer` headers. It
+  is shown once — only its SHA-256 hash is stored (`display_links`, server-only).
+- **What it shows:** open reports of any age plus everything from the last 24 hours — priority,
+  category, headline, a short place, status, time, and the happening-now / weapon / hurt flags.
+  Never who reported, contact details, descriptions, people, photos, transcripts or notes
+  (`api/_lib/displays.ts`, enforced by `npm run test:api`).
+- **Revoke:** the same card. The screen shows "This display link no longer works" at its next
+  refresh. Admins see when each display was last on screen.
+- **Demo mode:** `/tv` shows the sample data without a link.
 
 ## Films
 

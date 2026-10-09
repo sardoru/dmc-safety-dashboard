@@ -3,6 +3,25 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.3] — 2026-10-09 — Wall display for the office TV
+
+### Added
+- **`/tv` — a wall display** for a TV on an office wall: the live map (dark, sized for a room)
+  beside the latest reports, with counts (new · open · P1–P2 open · last 24 h · lookouts), a
+  clock, a gold "New" mark for a report's first ten minutes, and the happening-now / weapon /
+  hurt flags. It refreshes every 15 seconds and keeps the last picture up while it reconnects. It
+  keeps the screen awake, hides the cursor, and scales from 1080p to 4K (4K draws 512-px map
+  tiles so street names stay readable).
+- **Private, revocable display links** — Admin → Access → *Wall displays*: name a screen, copy
+  its link once (`/tv#key=…`), see when it was last on screen, revoke it. Creating and revoking
+  are audited.
+- `GET /api/display` (key in `X-Display-Key`): open reports of any age plus the last 24 hours,
+  sending only what a wall shows. It never sends the reporter, contact details, descriptions,
+  people, photos, transcripts or notes. Rate-limited to 40 requests a minute per address.
+- Migration `0005_display_links.sql`: `display_links` (label, SHA-256 of the key, who made it,
+  last seen, revoked) with RLS on and no policies — only the server reads it.
+- API harness: 22 new checks (110 total).
+
 ## [0.4.2] — 2026-10-09 — "How to report" film
 
 ### Added

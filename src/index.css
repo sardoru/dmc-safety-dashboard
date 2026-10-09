@@ -435,6 +435,16 @@
   border-color: #d4b566;
   box-shadow: 0 0 0 3px rgb(212 181 102 / 0.55);
 }
+/* The wall display (/tv): pins sized for a TV across the room, growing with the screen. */
+.tv-map .dt-pin {
+  transform: scale(1.35);
+  transform-origin: 50% 100%;
+}
+@media (min-width: 2400px) {
+  .tv-map .dt-pin {
+    transform: scale(2.3);
+  }
+}
 .dt-pin-ring {
   position: absolute;
   top: 1px;
