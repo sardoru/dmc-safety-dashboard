@@ -78,6 +78,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => 
   }
   if (url.startsWith('https://fake.supabase.co/rest/v1/profiles') && (init.method ?? 'GET') === 'GET') {
     const q = new URL(url).searchParams;
+    const emailIn = q.get('email')?.match(/^in\.\((.*)\)$/)?.[1];
+    if (emailIn !== undefined) {
+      const wanted = emailIn.split(',');
+      return json(200, Object.values(USERS).filter((x) => wanted.includes(x.email)).map((x) => ({ email: x.email })));
+    }
     const id = q.get('id')?.replace('eq.', '');
     const byEmail = q.get('email')?.replace('eq.', '');
     if (byEmail && profileLookupFails) return json(500, { code: 'XX000', message: 'profiles lookup failed' });
@@ -1262,6 +1267,7 @@ interface QRow {
   queued_by: string | null;
   created_at: string;
   claimed_at: string | null;
+  emailing_at: string | null;
   sent_at: string | null;
   attempts: number;
 }
@@ -1274,32 +1280,38 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   process.env.RESEND_API_KEY = 're_test';
   process.env.SITE_URL = 'https://www.901safety.com';
   const ADMIN_ID = USERS['tok-adm'].id;
-  const SECRET = 'cron-secret-test';
+  const SECRET = 'cron-secret-test-0123456789';
   const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
   // An in-memory invite_queue, its settings row and claim_queued_invites(), behind a small PostgREST
-  // stand-in (eq/lt/gte/in/is filters, order, limit, select, HEAD counts). The SQL itself — the
-  // partial unique index, FOR UPDATE SKIP LOCKED, the grants — is checked against Postgres separately.
+  // stand-in (eq/lt/gte/in/is filters, order, limit, select, HEAD counts, conditional updates). The SQL
+  // itself — indexes, FOR UPDATE SKIP LOCKED, the check-and-set statements, grants — is checked on
+  // Postgres in supabase/tests/0008_invite_queue_brakes.test.sql.
   const queue: QRow[] = [];
   let seq = 0;
-  const settings: Record<string, unknown> = { paused: false, per_run: 5 };
+  const FRESH_SETTINGS = { id: true, paused: false, per_run: 5, pause_reason: null, updated_by: null, updated_at: null, last_slot: '-infinity', last_run_at: null, last_run: null };
+  const settings: Record<string, unknown> = { ...FRESH_SETTINGS };
   const claims: number[] = [];
   let hideWaiting = false;
   let notMigrated = false;
-  const mailFails: Record<string, () => Response> = {};
-  const linkFails: Record<string, () => Response> = {};
-  const mailLog: { to: string; at: number }[] = [];
+  /** Open invitations by address (officer_invites, status pending). */
+  const pendingEmails = new Set<string>();
+  /** Run as a link is made or an email is sent for an address; a Response answers instead of the mock. */
+  const linkFails: Record<string, () => Response | void> = {};
+  const mailFails: Record<string, () => Response | void> = {};
+  const mailLog: { to: string; at: number; emailingAt: string | null; key: string | null }[] = [];
   const newRow = (f: Partial<QRow> & { email: string }): QRow => {
     seq++;
     return {
       id: `00000000-0000-4000-8000-${String(seq).padStart(12, '0')}`, seq, role: 'business', name: null, label: null, status: 'queued',
-      outcome: null, queued_by: ADMIN_ID, created_at: new Date().toISOString(), claimed_at: null, sent_at: null, attempts: 0, ...f,
+      outcome: null, queued_by: ADMIN_ID, created_at: new Date().toISOString(), claimed_at: null, emailing_at: null, sent_at: null, attempts: 0, ...f,
     };
   };
   const seed = (...rows: (Partial<QRow> & { email: string })[]) => rows.map((f) => { const q = newRow(f); queue.push(q); return q; });
   const reset = () => {
-    queue.length = 0; claims.length = 0; mailLog.length = 0;
-    Object.assign(settings, { paused: false, per_run: 5 });
+    queue.length = 0; claims.length = 0; mailLog.length = 0; pendingEmails.clear();
+    for (const k of Object.keys(settings)) delete settings[k];
+    Object.assign(settings, FRESH_SETTINGS);
     for (const k of Object.keys(mailFails)) delete mailFails[k];
     for (const k of Object.keys(linkFails)) delete linkFails[k];
   };
@@ -1313,23 +1325,24 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     return out;
   };
   const cmp = (a: unknown, b: string) => (typeof a === 'number' ? a - Number(b) : String(a) < b ? -1 : String(a) > b ? 1 : 0);
-  const holds = (q: QRow, col: string, expr: string): boolean => {
+  const holds = (row: object, col: string, expr: string): boolean => {
     const negate = expr.startsWith('not.');
     const e = negate ? expr.slice(4) : expr;
     const op = e.slice(0, e.indexOf('.'));
     const val = e.slice(e.indexOf('.') + 1);
-    const v = (q as unknown as Record<string, unknown>)[col];
+    const v = (row as Record<string, unknown>)[col];
     let ok: boolean;
     if (op === 'eq') ok = String(v) === val;
     else if (op === 'neq') ok = String(v) !== val;
-    else if (op === 'lt') ok = v !== null && cmp(v, val) < 0;
-    else if (op === 'gte') ok = v !== null && cmp(v, val) >= 0;
+    else if (op === 'lt') ok = v !== null && v !== undefined && (v === '-infinity' || cmp(v, val) < 0);
+    else if (op === 'gte') ok = v !== null && v !== undefined && v !== '-infinity' && cmp(v, val) >= 0;
     else if (op === 'in') ok = listOf(val.replace(/^\(|\)$/g, '')).includes(String(v));
-    else if (op === 'is') ok = val === 'null' ? v === null : String(v) === val;
+    else if (op === 'is') ok = val === 'null' ? v === null || v === undefined : String(v) === val;
     else throw new Error(`harness: unmocked filter ${op}`);
     return negate ? !ok : ok;
   };
-  const matching = (u: URL) => queue.filter((q) => [...u.searchParams.entries()].every(([k, v]) => RESERVED.has(k) || holds(q, k, v)));
+  const fits = (row: object, u: URL) => [...u.searchParams.entries()].every(([k, v]) => RESERVED.has(k) || holds(row, k, v));
+  const matching = (u: URL) => queue.filter((q) => fits(q, u));
   const ordered = (rows: QRow[], spec: string | null) => {
     if (!spec) return rows;
     const keys = spec.split(',').map((s) => { const [col, dir = 'asc'] = s.split('.'); return { col, desc: dir === 'desc' }; });
@@ -1345,8 +1358,8 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
       return 0;
     });
   };
-  const pick = (q: QRow, select: string | null) =>
-    !select || select === '*' ? { ...q } : Object.fromEntries(select.split(',').map((c) => [c, (q as unknown as Record<string, unknown>)[c]]));
+  const pick = (q: object, select: string | null) =>
+    !select || select === '*' ? { ...q } : Object.fromEntries(select.split(',').map((c) => [c, (q as Record<string, unknown>)[c] ?? null]));
 
   upstream = (url, init) => {
     const method = init.method ?? 'GET';
@@ -1365,9 +1378,19 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
       return json(200, picked.map((q) => ({ ...q })));
     }
     if (u.pathname === '/rest/v1/invite_queue_settings') {
-      if (method === 'GET') return json(200, [{ paused: settings.paused, per_run: settings.per_run }]);
+      if (method === 'GET') return json(200, [pick(settings, u.searchParams.get('select'))]);
+      if (method === 'PATCH') {
+        // A conditional update (e.g. the slot check-and-set) changes the row only when its filters hold.
+        const hit = fits(settings, u);
+        if (hit) Object.assign(settings, body);
+        return prefer.includes('return=representation') ? json(200, hit ? [pick(settings, u.searchParams.get('select'))] : []) : new Response(null, { status: 204 });
+      }
       Object.assign(settings, Array.isArray(body) ? body[0] : body);
       return json(201, []);
+    }
+    if (u.pathname === '/rest/v1/officer_invites' && method === 'GET' && (u.searchParams.get('email') ?? '').startsWith('in.(')) {
+      const wanted = listOf((u.searchParams.get('email') ?? '').replace(/^in\.\(|\)$/g, ''));
+      return json(200, wanted.filter((e) => pendingEmails.has(e)).map((email) => ({ email })));
     }
     if (u.pathname === '/rest/v1/invite_queue') {
       if (method === 'POST') {
@@ -1381,7 +1404,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
         for (const x of list) queue.push(newRow(x));
         return json(201, []);
       }
-      if (method === 'GET' && hideWaiting && u.searchParams.get('select') === 'email') return json(200, []);
+      if (method === 'GET' && hideWaiting && u.searchParams.get('select') === 'email' && u.searchParams.get('status') === 'in.(queued,sending)') return json(200, []);
       const rows = matching(u);
       if (method === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': `*/${rows.length}` } });
       if (method === 'GET') {
@@ -1397,12 +1420,14 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     }
     if (url.startsWith('https://api.resend.com/')) {
       const to = String((body as { to?: unknown } | null)?.to ?? '');
-      mailLog.push({ to, at: Date.now() });
-      if (mailFails[to]) return mailFails[to]();
+      mailLog.push({ to, at: Date.now(), emailingAt: byEmail(to)?.emailing_at ?? null, key: String(init.headers?.['idempotency-key'] ?? '') || null });
+      const answer = mailFails[to]?.();
+      if (answer) return answer;
     }
     if (url.startsWith('https://fake.supabase.co/auth/v1/admin/generate_link')) {
       const email = String((body as { email?: unknown } | null)?.email ?? '');
-      if (linkFails[email]) return linkFails[email]();
+      const answer = linkFails[email]?.();
+      if (answer) return answer;
     }
     return membershipUpstream(url, init);
   };
@@ -1413,7 +1438,11 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     console.log = () => {}; console.error = () => {};
     try { return await fn(); } finally { console.log = log; console.error = error; }
   };
-  const cron = (token: string | null) => quiet(() => run('api/cron/invites.ts', 'GET', token));
+  /** A cron delivery. Each starts a new quarter hour unless `sameSlot` (a duplicate delivery). */
+  const cron = (token: string | null, sameSlot = false) => {
+    if (!sameSlot) settings.last_slot = '-infinity';
+    return quiet(() => run('api/cron/invites.ts', 'GET', token));
+  };
   const audits = (action: string) =>
     calls.filter((c) => c.method === 'POST' && c.url.startsWith('https://fake.supabase.co/rest/v1/audit_log') && (c.body as AuditBody)?.action === action).map((c) => c.body as AuditBody);
   const queueWrites = () => calls.filter((c) => c.method !== 'GET' && c.method !== 'HEAD' && /\/rest\/v1\/(invite_queue|rpc\/claim_queued_invites)/.test(c.url));
@@ -1451,8 +1480,13 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   const added = audits('queue.added').at(-1);
   check('…audited: queue.added by the admin, with the label, role and counts', added?.actor_id === ADMIN_ID && added?.target === 'Safety Meeting · Oct 8' && added?.meta.added === 4 && added?.meta.duplicates === 1 && added?.meta.invalid === 2 && added?.meta.skipped === 0 && added?.meta.role === 'business', added);
 
-  r = await api('tok-adm', { action: 'add', text: 'Luis@Ortegas.test\nnew.one@shop.test', role: 'officer' });
-  check('addresses already queued are skipped; the rest added with the chosen role', r.data.added === 1 && r.data.skipped === 1 && queue.length === 5 && byEmail('new.one@shop.test')?.role === 'officer' && byEmail('luis@ortegas.test')?.role === 'business', r.data);
+  r = await api('tok-adm', { action: 'add', text: 'Luis@Ortegas.test\nnew.one@shop.test', role: 'business' });
+  check('addresses already queued are skipped; the rest added', r.data.added === 1 && r.data.skipped === 1 && queue.length === 5 && byEmail('new.one@shop.test')?.role === 'business', r.data);
+  for (const role of ['officer', 'admin']) {
+    const before = queue.length;
+    r = await api('tok-adm', { action: 'add', text: 'k.price@dt.test', role });
+    check(`a list as ${role} → 400 "member businesses only — use Invite someone", nothing queued`, r.statusCode === 400 && /member businesses only/.test(r.data.error) && /Invite someone/.test(r.data.error) && queue.length === before, r.data);
+  }
   hideWaiting = true;
   r = await api('tok-adm', { action: 'add', text: 'dana@riverbluff.test\nnew.two@shop.test' });
   hideWaiting = false;
@@ -1505,7 +1539,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   seed(...Array.from({ length: 12 }, (_, i) => ({ email: `shop${String(i + 1).padStart(2, '0')}@downtown.test` })));
   calls.length = 0; mails.length = 0; links.length = 0;
   r = await cron(SECRET);
-  check('a run claims exactly the per-run count (5 of 12) and sends those 5', r.statusCode === 200 && JSON.stringify(claims) === '[5]' && r.data.claimed === 5 && r.data.sent === 5 && mails.length === 5 && queue.filter((q) => q.status === 'queued').length === 7, { d: r.data, claims });
+  check('a run claims exactly the per-run count (5 of 12), one row at a time, and sends those 5', r.statusCode === 200 && JSON.stringify(claims) === '[1,1,1,1,1]' && r.data.claimed === 5 && r.data.sent === 5 && mails.length === 5 && queue.filter((q) => q.status === 'queued').length === 7, { d: r.data, claims });
   check('…the oldest first, in paste order', JSON.stringify(mails.map((m) => m.to)) === JSON.stringify(['shop01', 'shop02', 'shop03', 'shop04', 'shop05'].map((s) => `${s}@downtown.test`)), mails.map((m) => m.to));
   const gaps = mailLog.slice(1).map((m, i) => m.at - mailLog[i].at);
   check(`…emails at least ~600 ms apart (${gaps.join(', ')} ms)`, gaps.length === 4 && gaps.every((g) => g >= 590), gaps);
@@ -1516,9 +1550,12 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   check('…each address gets a pending invite (Pending invites) and a one-time invite link', calls.filter((c) => c.method === 'POST' && c.url.startsWith('https://fake.supabase.co/rest/v1/officer_invites')).length === 5 && links.filter((l) => l.type === 'invite').length === 5);
   r = await api('tok-adm', { action: 'list' });
   check('list after the run: sent 5 · queued 7, recent results newest first', r.data.counts?.sent === 5 && r.data.counts?.queued === 7 && (r.data.recent as QRow[]).length === 5 && (r.data.recent as QRow[])[0].email === 'shop05@downtown.test' && (r.data.recent as QRow[]).every((x) => x.status === 'sent'), (r.data.recent as QRow[]).map((x) => x.email));
+  check('…each email marked as started (emailing_at) before it went out, with the row id as its idempotency key', mailLog.length === 5 && mailLog.every((m) => !!m.emailingAt && m.key === `invite-queue/${byEmail(m.to)?.id}`), mailLog);
+  check('…and the run recorded: last_run_at and its counts', typeof settings.last_run_at === 'string' && JSON.stringify(settings.last_run) === JSON.stringify({ claimed: 5, sent: 5, skipped: 0, failed: 0, cancelled: 0 }), settings);
   settings.per_run = 2;
+  claims.length = 0;
   r = await cron(SECRET);
-  check('per-run count set to 2 → the next run claims 2', claims.at(-1) === 2 && r.data.claimed === 2 && r.data.sent === 2, r.data);
+  check('per-run count set to 2 → the next run claims 2', JSON.stringify(claims) === '[1,1]' && r.data.claimed === 2 && r.data.sent === 2, r.data);
 
   // ── the queue and Invite someone send the same thing
   reset();
@@ -1532,10 +1569,11 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   check('a queued invitation is the very email Invite someone sends (subject, text, HTML)', mails.length === 2 && same(viaQueue?.subject, viaSingle?.subject) && same(viaQueue?.text, viaSingle?.text) && same(viaQueue?.html, viaSingle?.html));
   const singleAudit = audits('invite.sent').at(-1);
   check('Invite someone answers and audits as before: { invited, business, emailed }, meta { role } — no via', r.statusCode === 200 && JSON.stringify(r.data) === JSON.stringify({ status: 'invited', role: 'business', emailed: true }) && singleAudit?.target === 'twin.single@shop.test' && JSON.stringify(singleAudit?.meta) === JSON.stringify({ role: 'business' }), { d: r.data, a: singleAudit });
+  check('…and its email carries no idempotency key (only the queue’s do)', mailLog.find((m) => m.to === 'twin.single@shop.test')?.key === null && mailLog.find((m) => m.to === 'twin.queue@shop.test')?.key?.startsWith('invite-queue/') === true, mailLog);
 
   // ── people who already use the dashboard
   reset();
-  seed({ email: 'owner@shop.test' }, { email: 'officer@dt.test', role: 'admin' }, { email: 'invitee@shop.test' });
+  seed({ email: 'owner@shop.test' }, { email: 'officer@dt.test' }, { email: 'invitee@shop.test' });
   calls.length = 0; mails.length = 0; links.length = 0;
   r = await cron(SECRET);
   check('accounts that have signed in → skipped, "Already a member" — no email, no role or invite change', byEmail('owner@shop.test')?.status === 'skipped' && byEmail('owner@shop.test')?.outcome === 'Already a member' && byEmail('officer@dt.test')?.status === 'skipped' && !mails.some((m) => m.to === 'owner@shop.test' || m.to === 'officer@dt.test') && !calls.some((c) => c.method !== 'GET' && /\/rest\/v1\/(profiles|officer_invites)/.test(c.url)), queue.map((q) => [q.email, q.status, q.outcome]));
@@ -1552,16 +1590,16 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   check('…the failure says why', byEmail('bounce@shop.test')?.outcome === 'Couldn’t send: The to address is not valid.', byEmail('bounce@shop.test')?.outcome);
 
   reset();
-  seed({ email: 'busy@shop.test' }, { email: 'busy.again@shop.test', attempts: 2 });
+  seed({ email: 'busy.again@shop.test', attempts: 2 }, { email: 'busy@shop.test' }, { email: 'after.busy@shop.test' });
   const tooMany = () => json(429, { statusCode: 429, name: 'rate_limit_exceeded', message: 'Too many requests. You can only make 2 requests per second.' });
   mailFails['busy@shop.test'] = tooMany;
   mailFails['busy.again@shop.test'] = tooMany;
   r = await cron(SECRET);
-  check('the email service is busy (429) → back in the queue for the next run', byEmail('busy@shop.test')?.status === 'queued' && byEmail('busy@shop.test')?.claimed_at === null && byEmail('busy@shop.test')?.outcome === 'Too many at once — trying again next run' && r.data.retried === 1, byEmail('busy@shop.test'));
+  check('the email service is busy (429) → back in the queue (not started), and the run backs off until the next one', byEmail('busy@shop.test')?.status === 'queued' && byEmail('busy@shop.test')?.claimed_at === null && byEmail('busy@shop.test')?.emailing_at === null && byEmail('busy@shop.test')?.attempts === 1 && byEmail('busy@shop.test')?.outcome === 'Too many at once — trying again next run' && r.data.retried === 1 && byEmail('after.busy@shop.test')?.status === 'queued' && byEmail('after.busy@shop.test')?.attempts === 0, queue.map((q) => [q.email, q.status, q.attempts]));
   check('…but not forever: still busy on the 3rd try → failed', byEmail('busy.again@shop.test')?.status === 'failed' && /still too busy after 3 tries/.test(byEmail('busy.again@shop.test')?.outcome ?? ''), byEmail('busy.again@shop.test'));
 
   reset();
-  seed({ email: 'link.busy@shop.test' }, { email: 'link.broken@shop.test' });
+  seed({ email: 'link.broken@shop.test' }, { email: 'link.busy@shop.test' });
   linkFails['link.busy@shop.test'] = () => json(429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'Email rate limit exceeded' });
   linkFails['link.broken@shop.test'] = () => json(422, { code: 422, error_code: 'validation_failed', msg: 'Unable to validate email address: invalid format' });
   mails.length = 0;
@@ -1570,24 +1608,37 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
 
   // ── rows stuck in `sending`
   reset();
-  const [stuck, hopeless, inflight] = seed(
+  const [stuck, hopeless, emailed, inflight] = seed(
     { email: 'stuck@shop.test', status: 'sending', claimed_at: ago(45), attempts: 1 },
     { email: 'hopeless@shop.test', status: 'sending', claimed_at: ago(45), attempts: 3 },
+    { email: 'emailed@shop.test', status: 'sending', claimed_at: ago(45), emailing_at: ago(45), attempts: 1 },
     { email: 'inflight@shop.test', status: 'sending', claimed_at: ago(5), attempts: 1 },
   );
   mails.length = 0;
   r = await cron(SECRET);
-  check('stuck over 30 min with tries left → back in the queue, and sent this run (2nd try)', r.data.requeued === 1 && stuck.status === 'sent' && stuck.attempts === 2 && mails.some((m) => m.to === 'stuck@shop.test'), { d: r.data, stuck });
+  check('stuck over 30 min before its email started → back in the queue, and sent this run (2nd try)', r.data.requeued === 1 && stuck.status === 'sent' && stuck.attempts === 2 && mails.some((m) => m.to === 'stuck@shop.test'), { d: r.data, stuck });
   check('stuck after 3 tries → failed, saying so; not sent', r.data.gaveUp === 1 && hopeless.status === 'failed' && /^Gave up after 3 tries/.test(hopeless.outcome ?? '') && !mails.some((m) => m.to === 'hopeless@shop.test'), hopeless);
+  check('stuck after its email started → failed "May have gone out — check before inviting again", never sent again', r.data.unsure === 1 && emailed.status === 'failed' && emailed.outcome === 'May have gone out — check before inviting again' && !mails.some((m) => m.to === 'emailed@shop.test'), emailed);
   check('claimed 5 minutes ago → left alone (its run may still be going)', inflight.status === 'sending' && inflight.attempts === 1 && !mails.some((m) => m.to === 'inflight@shop.test'), inflight);
 
-  // ── two runs at once never send the same row twice
+  reset();
+  seed({ email: 'no.answer@shop.test' }, { email: 'next.one@shop.test' });
+  mailFails['no.answer@shop.test'] = () => { throw new TypeError('fetch failed'); };
+  mails.length = 0;
+  r = await cron(SECRET);
+  check('no answer at all from the email service → failed "May have gone out", not tried again; the next one still goes', byEmail('no.answer@shop.test')?.status === 'failed' && byEmail('no.answer@shop.test')?.outcome === 'May have gone out — check before inviting again' && byEmail('next.one@shop.test')?.status === 'sent', queue.map((q) => [q.email, q.status, q.outcome]));
+
+  // ── one run per quarter hour: a duplicate delivery does nothing
   reset();
   seed(...Array.from({ length: 12 }, (_, i) => ({ email: `pair${String(i + 1).padStart(2, '0')}@shop.test` })));
   mails.length = 0;
   const [runA, runB] = await quiet(() => Promise.all([run('api/cron/invites.ts', 'GET', SECRET), run('api/cron/invites.ts', 'GET', SECRET)]));
   const tos = mails.map((m) => String(m.to));
-  check('two runs at once: 5 + 5 claimed, 10 different addresses, each emailed once', runA.data.claimed === 5 && runB.data.claimed === 5 && tos.length === 10 && new Set(tos).size === 10 && queue.filter((q) => q.status === 'sent').length === 10 && queue.every((q) => q.attempts <= 1), { a: runA.data, b: runB.data, tos });
+  check('the cron delivered twice at once → one run (5 sent), the other does nothing; no address emailed twice', [runA.data, runB.data].filter((d) => d.duplicate).length === 1 && runA.data.claimed + runB.data.claimed === 5 && tos.length === 5 && new Set(tos).size === 5 && queue.every((q) => q.attempts <= 1), { a: runA.data, b: runB.data, tos });
+  r = await cron(SECRET, true);
+  check('…and again later in the same quarter hour → still nothing', r.data.duplicate === true && r.data.claimed === 0 && mails.length === 5, r.data);
+  r = await cron(SECRET);
+  check('…the next quarter hour runs as usual (5 more)', r.data.duplicate === false && r.data.sent === 5 && mails.length === 10, r.data);
 
   // ── whoever queued it must still be an administrator
   reset();
@@ -1603,7 +1654,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   seed({ email: 'first@shop.test' }, { email: 'second@shop.test' }, { email: 'third@shop.test' });
   const t0 = Date.now();
   const slow = await quiet(() => runQueue(getAdmin(), { now: () => t0 + (mailLog.length ? 21_000 : 0), sleep: async () => {} }));
-  check('a run past 20 s starts no new send: the rest go back to the queue, that try not counted', slow.sent === 1 && slow.released === 2 && ['second@shop.test', 'third@shop.test'].every((e) => byEmail(e)?.status === 'queued' && byEmail(e)?.attempts === 0 && byEmail(e)?.claimed_at === null), slow);
+  check('a run past 20 s claims no more: the rest stay queued, untouched', slow.sent === 1 && slow.claimed === 1 && ['second@shop.test', 'third@shop.test'].every((e) => byEmail(e)?.status === 'queued' && byEmail(e)?.attempts === 0 && byEmail(e)?.claimed_at === null), slow);
 
   // ── cancel: one row, a label's rows, all of them
   reset();
@@ -1620,9 +1671,13 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   check('cancel a row that’s no longer queued → 409', r.statusCode === 409, r.data);
   r = await api('tok-adm', { action: 'cancel', label: 'Safety Meeting · Oct 8' });
   check('cancel a label → its queued rows; one already sent stays sent', r.data.cancelled === 2 && c1.status === 'cancelled' && c2.status === 'cancelled' && c4.status === 'sent', r.data);
-  seed({ email: 'c5@shop.test' }, { email: 'c6@shop.test', status: 'sending' });
+  seed(
+    { email: 'c5@shop.test' },
+    { email: 'c6@shop.test', status: 'sending', claimed_at: ago(0), emailing_at: ago(0) },
+    { email: 'c7@shop.test', status: 'sending', claimed_at: ago(0) },
+  );
   r = await api('tok-adm', { action: 'cancel', all: true });
-  check('cancel the rest → every queued row; one being sent finishes', r.data.cancelled === 1 && byEmail('c5@shop.test')?.status === 'cancelled' && byEmail('c6@shop.test')?.status === 'sending', r.data);
+  check('cancel the rest → every queued row, and a claimed one whose email hasn’t started; an email already on its way finishes', r.data.cancelled === 2 && byEmail('c5@shop.test')?.status === 'cancelled' && byEmail('c7@shop.test')?.status === 'cancelled' && byEmail('c6@shop.test')?.status === 'sending', r.data);
   const cancels = audits('queue.cancelled');
   check('cancellations audited: one (the address), a label, all', cancels.length === 3 && cancels[0].target === 'c3@shop.test' && cancels[0].meta.scope === 'one' && cancels[1].target === 'Safety Meeting · Oct 8' && cancels[1].meta.count === 2 && cancels[2].meta.scope === 'all', cancels);
   r = await api('tok-adm', { action: 'cancel' });
@@ -1631,6 +1686,99 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   check('cancel with a bad id → 400', r.statusCode === 400, r.data);
   r = await api('tok-off', { action: 'cancel', all: true });
   check('officer can’t cancel → 403', r.statusCode === 403, r.data);
+
+  // ── brakes: pause and cancel stop what hasn't started, mid-run too
+  reset();
+  seed(...['p1', 'p2', 'p3', 'p4', 'p5'].map((p) => ({ email: `${p}@pause.test` })));
+  mailFails['p1@pause.test'] = () => { settings.paused = true; };
+  mails.length = 0; claims.length = 0;
+  r = await cron(SECRET);
+  check('paused while a run is going → it stops before the next claim: 1 sent, the other 4 untouched', r.data.paused === true && r.data.sent === 1 && JSON.stringify(claims) === '[1]' && mails.length === 1 && ['p2', 'p3', 'p4', 'p5'].every((p) => byEmail(`${p}@pause.test`)?.status === 'queued' && byEmail(`${p}@pause.test`)?.attempts === 0), { d: r.data, claims });
+
+  reset();
+  seed({ email: 'q1@pause.test' }, { email: 'q2@pause.test' });
+  linkFails['q1@pause.test'] = () => { settings.paused = true; };
+  mails.length = 0;
+  r = await cron(SECRET);
+  check('paused after a row was claimed, before its email → not emailed; back in the queue as it was; the run stops', mails.length === 0 && r.data.paused === true && byEmail('q1@pause.test')?.status === 'queued' && byEmail('q1@pause.test')?.attempts === 0 && byEmail('q1@pause.test')?.emailing_at === null && byEmail('q1@pause.test')?.claimed_at === null && byEmail('q2@pause.test')?.attempts === 0, queue.map((q) => [q.email, q.status, q.attempts]));
+
+  reset();
+  seed({ email: 'x1@cancel.test' }, { email: 'x2@cancel.test' });
+  // An administrator cancels x1 after the run claimed it, before its email (what cancel does to a claimed row).
+  linkFails['x1@cancel.test'] = () => { Object.assign(byEmail('x1@cancel.test')!, { status: 'cancelled', outcome: 'Cancelled by Officer Hayes' }); };
+  mails.length = 0;
+  r = await cron(SECRET);
+  check('cancelled after it was claimed → the check right before the email stops it; it stays cancelled; the next still goes', !mails.some((m) => m.to === 'x1@cancel.test') && byEmail('x1@cancel.test')?.status === 'cancelled' && byEmail('x1@cancel.test')?.outcome === 'Cancelled by Officer Hayes' && byEmail('x1@cancel.test')?.emailing_at === null && byEmail('x2@cancel.test')?.status === 'sent' && r.data.cancelled === 1 && r.data.sent === 1, queue.map((q) => [q.email, q.status, q.outcome]));
+
+  reset();
+  seed({ email: 'y1@cancel.test' });
+  linkFails['y1@cancel.test'] = () => {
+    Object.assign(byEmail('y1@cancel.test')!, { status: 'cancelled', outcome: 'Cancelled by Officer Hayes' });
+    return json(429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'Email rate limit exceeded' });
+  };
+  r = await cron(SECRET);
+  check('a rate limit on a row cancelled after it was claimed → stays cancelled, never back in the queue', byEmail('y1@cancel.test')?.status === 'cancelled' && r.data.cancelled === 1 && r.data.retried === 0, { q: byEmail('y1@cancel.test'), d: r.data });
+
+  // ── the email service's daily limit: the queue pauses itself
+  reset();
+  seed({ email: 'l1@limit.test' }, { email: 'l2@limit.test' }, { email: 'l3@limit.test' });
+  mailFails['l2@limit.test'] = () => json(429, { statusCode: 429, name: 'daily_quota_exceeded', message: 'You have reached your daily email sending quota.' });
+  calls.length = 0; mails.length = 0;
+  r = await cron(SECRET);
+  check('daily limit → the queue pauses itself, saying why; the row goes back unsent (try not counted); the run stops', r.data.limited === true && r.data.sent === 1 && settings.paused === true && settings.pause_reason === 'the daily email limit was reached' && settings.updated_by === null && byEmail('l2@limit.test')?.status === 'queued' && byEmail('l2@limit.test')?.attempts === 0 && byEmail('l2@limit.test')?.emailing_at === null && byEmail('l3@limit.test')?.attempts === 0, { d: r.data, s: settings, q: queue.map((q) => [q.email, q.status, q.attempts]) });
+  const autoPause = audits('queue.paused').at(-1);
+  check('…audited as the system pausing the queue, with the reason', autoPause?.actor_id === null && autoPause?.meta.reason === 'the daily email limit was reached', autoPause);
+  r = await api('tok-adm', { action: 'list' });
+  check('…the card sees it: paused, "the daily email limit was reached"', r.data.paused === true && r.data.pauseReason === 'the daily email limit was reached', r.data);
+  r = await cron(SECRET);
+  check('…and the next run sends nothing', r.data.paused === true && mails.length === 1, r.data);
+  r = await api('tok-adm', { action: 'resume' });
+  check('resume clears the reason (audited, noting what it followed)', settings.paused === false && settings.pause_reason === null && audits('queue.resumed').at(-1)?.meta.after === 'the daily email limit was reached', settings);
+  reset();
+  seed({ email: 'm1@limit.test' });
+  mailFails['m1@limit.test'] = () => json(429, { statusCode: 429, name: 'monthly_quota_exceeded', message: 'You have reached your monthly email sending quota.' });
+  await cron(SECRET);
+  check('monthly limit → "the monthly email limit was reached"', settings.pause_reason === 'the monthly email limit was reached' && byEmail('m1@limit.test')?.status === 'queued', settings);
+
+  // ── re-pasting never re-invites
+  reset();
+  seed({ email: 'old.sent@shop.test', status: 'sent' });
+  pendingEmails.add('open.invite@shop.test');
+  const REPASTE = 'old.sent@shop.test\nopen.invite@shop.test\ninvitee@shop.test\nowner@shop.test\nbrand.new@shop.test';
+  calls.length = 0;
+  r = await api('tok-adm', { action: 'add', text: REPASTE, dryRun: true });
+  check('dry run → would add 1; 4 already invited (sent from a list, an open invitation, accounts), named; nothing queued or audited', r.statusCode === 200 && r.data.dryRun === true && r.data.added === 1 && r.data.alreadyInvited === 4 && JSON.stringify([...r.data.alreadyInvitedEmails].sort()) === JSON.stringify(['invitee@shop.test', 'old.sent@shop.test', 'open.invite@shop.test', 'owner@shop.test']) && queue.length === 1 && audits('queue.added').length === 0, r.data);
+  check('…with the queue’s pace for the confirm step', r.data.queue?.queued === 0 && r.data.queue?.perRun === 5 && r.data.queue?.paused === false && r.data.queue?.everyMinutes === 15 && new Date(String(r.data.queue?.nextRunAt)).getTime() > Date.now(), r.data.queue);
+  r = await api('tok-adm', { action: 'add', text: REPASTE });
+  check('add → only the new address is queued; the 4 already invited are reported, not queued', r.data.added === 1 && r.data.alreadyInvited === 4 && queue.length === 2 && !!byEmail('brand.new@shop.test') && audits('queue.added').at(-1)?.meta.alreadyInvited === 4, r.data);
+  r = await api('tok-adm', { action: 'add', text: REPASTE });
+  check('the same paste again → nothing new: 1 already waiting, 4 already invited', r.data.added === 0 && r.data.skipped === 1 && r.data.alreadyInvited === 4 && queue.length === 2, r.data);
+  r = await api('tok-adm', { action: 'add', text: REPASTE, reinvite: true });
+  check('"Invite again people who were already invited" → those 4 are queued (audited as a re-invite)', r.data.added === 4 && r.data.reinvited === 4 && r.data.alreadyInvited === 0 && r.data.skipped === 1 && queue.length === 6 && audits('queue.added').at(-1)?.meta.reinvite === true, r.data);
+
+  // ── lists are for member businesses
+  reset();
+  seed({ email: 'old.officer@shop.test', role: 'officer' }, { email: 'shop@after.test' });
+  mails.length = 0;
+  r = await cron(SECRET);
+  check('an officer row queued before lists were business-only → cancelled, not sent', byEmail('old.officer@shop.test')?.status === 'cancelled' && /member businesses/.test(byEmail('old.officer@shop.test')?.outcome ?? '') && !mails.some((m) => m.to === 'old.officer@shop.test') && byEmail('shop@after.test')?.status === 'sent', queue.map((q) => [q.email, q.status, q.outcome]));
+
+  // ── the last run, for the card
+  r = await api('tok-adm', { action: 'list' });
+  check('list → the last run (time and counts), when pause/resume last changed, and the oldest waiting', typeof r.data.lastRunAt === 'string' && r.data.lastRun?.sent === 1 && r.data.lastRun?.cancelled === 1 && 'changedAt' in r.data && 'oldestQueuedAt' in r.data && 'pauseReason' in r.data, r.data);
+
+  // ── a short CRON_SECRET is refused
+  process.env.CRON_SECRET = 'short-secret';
+  claims.length = 0;
+  r = await cron('short-secret');
+  process.env.CRON_SECRET = SECRET;
+  check('CRON_SECRET under 16 characters → 503, nothing claimed', r.statusCode === 503 && /too short/.test(r.data.error) && claims.length === 0, r.data);
+
+  // ── "starting about HH:MM" is never in the past
+  const { schedule } = (await import(pathToFileURL(resolve(ROOT, 'src/components/admin/inviteQueue.ts')).href)) as typeof import('../src/components/admin/inviteQueue.ts');
+  const stale = { counts: { queued: 0, sending: 0, sent: 0, skipped: 0, failed: 0, cancelled: 0 }, perRun: 5, everyMinutes: 15, nextRunAt: Date.now() - 2 * 3_600_000 };
+  const when = schedule(stale, 10, Date.now());
+  check('the confirm step’s start time is never in the past (a stale next run → the next quarter hour)', when.first > Date.now() && when.first - Date.now() <= 15 * 60_000 && when.last === when.first + 15 * 60_000, { when, now: Date.now() });
 
   // ── before migration 0006
   notMigrated = true;
