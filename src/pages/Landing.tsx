@@ -7,6 +7,7 @@ import {
   Eye,
   Lock,
   Map as MapIcon,
+  MapPinned,
   Mic,
   Moon,
   Phone,
@@ -14,6 +15,7 @@ import {
   Scale,
   ShieldCheck,
   Sun,
+  Ticket,
   UserCog,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -110,6 +112,9 @@ export default function Landing() {
             <a href="#features" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:text-white md:block">
               Features
             </a>
+            <Link to="/live" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:text-white md:block">
+              Live map
+            </Link>
             <button
               onClick={toggleTheme}
               className="flex h-10 w-10 items-center justify-center rounded-xl text-white/80 hover:bg-white/10 hover:text-white"
@@ -171,11 +176,16 @@ export default function Landing() {
                 </Link>
               )}
             </div>
-            {FILM_DURATION > 0 && (
-              <a href="/how-it-works" className="mt-5 flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
-                <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
-              </a>
-            )}
+            <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+              {FILM_DURATION > 0 && (
+                <a href="/how-it-works" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                  <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
+                </a>
+              )}
+              <Link to="/live" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                <MapPinned className="h-5 w-5" /> See the live map
+              </Link>
+            </div>
             <a href="tel:911" className="mt-6 inline-flex items-center gap-2 text-[13px] font-semibold text-white/85 hover:text-white">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600">
                 <Phone className="h-3.5 w-3.5" />
@@ -345,6 +355,14 @@ export default function Landing() {
                 <li>
                   <Link to={isDemo ? '/welcome#demo' : '/login'} className="hover:text-ink">
                     {isDemo ? 'Try the demo' : 'Sign in'}
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/live" className="hover:text-ink">Live incident map</Link>
+                </li>
+                <li>
+                  <Link to="/join" className="inline-flex items-center gap-1.5 hover:text-ink">
+                    <Ticket className="h-3.5 w-3.5" aria-hidden /> Join with an access code
                   </Link>
                 </li>
                 <li>

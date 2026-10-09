@@ -41,7 +41,7 @@ interface Layers {
   bolos: boolean;
 }
 
-function FlyTo({ focus }: { focus?: MapFocus | null }) {
+export function FlyTo({ focus }: { focus?: MapFocus | null }) {
   const map = useMap();
   useEffect(() => {
     if (focus) map.flyTo([focus.lat, focus.lng], focus.zoom ?? 17, { duration: 0.7 });
@@ -50,7 +50,7 @@ function FlyTo({ focus }: { focus?: MapFocus | null }) {
 }
 
 /** Leaflet measures its box once; re-measure when the panel around it resizes. */
-function AutoResize() {
+export function AutoResize() {
   const map = useMap();
   useEffect(() => {
     const el = map.getContainer();
