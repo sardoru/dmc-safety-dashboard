@@ -11,6 +11,7 @@
     "test:api": "tsx scripts/api-harness.ts"
   },
   "dependencies": {
+    "@elevenlabs/client": "^1.26.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@simplewebauthn/browser": "^13.3.0",

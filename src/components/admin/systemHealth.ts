@@ -19,8 +19,9 @@ export interface Health {
 export interface LiveSessionStatus {
   loading: boolean;
   configured: boolean | null;
+  /** `elevenlabs`: the Eleven v4 agent. `gpt-live`: the OpenAI fallback line. */
+  provider?: 'elevenlabs' | 'gpt-live' | null;
   model?: string;
-  voice?: string;
   error?: string;
 }
 
@@ -124,9 +125,9 @@ export const ENV_DATABASE: EnvVar[] = [
 ];
 
 export const ENV_VOICE: EnvVar[] = [
-  { name: 'OPENAI_API_KEY', where: 'server' },
-  { name: 'OPENAI_LIVE_MODEL', where: 'server', optional: true, note: 'default gpt-live-1' },
-  { name: 'OPENAI_LIVE_VOICE', where: 'server', optional: true, note: 'default marin' },
+  { name: 'ELEVENLABS_API_KEY', where: 'server' },
+  { name: 'ELEVENLABS_AGENT_ID', where: 'server', note: 'from scripts/voice-agent.ts' },
+  { name: 'OPENAI_API_KEY', where: 'server', optional: true, note: 'GPT-Live fallback' },
 ];
 
 export const ENV_SPEECH: EnvVar[] = [

@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireRole, type Role } from './_lib/auth.js';
-import { getAdmin } from './_lib/supabaseAdmin.js';
+import { requireRole } from './_lib/auth.js';
+import { callerContext, type CallerContext } from './_lib/caller.js';
 import { fetchWithTimeout, isAbortError, methodNotAllowed, readBody, sendError, sendJson } from './_lib/http.js';
 import { CATEGORY_LABELS, PRIORITY_GUIDE, SUBJECT_SCHEMA, VEHICLE_SCHEMA } from './_lib/incidents.js';
 
 /**
- * GPT-Live voice interviewer — the two-way reporting line.
+ * GPT-Live voice interviewer — the fallback reporting line. The main line is
+ * the ElevenLabs agent (Eleven v4) behind /api/voice-session; this one takes
+ * the call where that agent isn't configured.
  *
  * Businesses (and public-safety officers) talk to a GPT-Live interviewer that
  * asks the right follow-up questions and files a structured incident report.
@@ -24,25 +26,6 @@ import { CATEGORY_LABELS, PRIORITY_GUIDE, SUBJECT_SCHEMA, VEHICLE_SCHEMA } from 
  */
 const LIVE_SESSIONS_URL = 'https://api.openai.com/v1/live/sessions';
 export const REPORT_TOOL_NAME = 'file_incident_report';
-
-type Persona = 'business' | 'officer';
-
-interface CallerContext {
-  persona: Persona;
-  businessName?: string;
-  address?: string;
-  displayName?: string;
-}
-
-/** Strip anything that could read as prompt structure from a DB-sourced value. */
-function safe(value: unknown, max = 90): string {
-  if (typeof value !== 'string') return '';
-  return value
-    .replace(/[\r\n\t"`{}<>\\]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max);
-}
 
 const SHARED_POLICIES = `BACKCHANNEL POLICY: Keep backchannels rare and short — a brief "okay" or "go ahead" while they are talking is enough. Do not talk over them.
 
@@ -235,29 +218,6 @@ export function liveSessionConfig(ctx: CallerContext) {
     },
     client: { data_channel: { allowed_client_events: CLIENT_EVENTS_ALLOWED } },
   };
-}
-
-/** Who is calling — read from the database, never from the request body. */
-async function callerContext(userId: string, role: Role): Promise<CallerContext> {
-  const persona: Persona = role === 'business' ? 'business' : 'officer';
-  const ctx: CallerContext = { persona };
-  try {
-    const admin = getAdmin();
-    const [{ data: profile }, { data: business }] = await Promise.all([
-      admin.from('profiles').select('display_name').eq('id', userId).maybeSingle(),
-      persona === 'business'
-        ? admin.from('businesses').select('name, address').eq('owner_id', userId).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-    ctx.displayName = safe(profile?.display_name, 60) || undefined;
-    if (business) {
-      ctx.businessName = safe((business as { name?: string }).name) || undefined;
-      ctx.address = safe((business as { address?: string }).address, 120) || undefined;
-    }
-  } catch {
-    /* context is a nicety — the interview works without it */
-  }
-  return ctx;
 }
 
 interface LiveCreateResponse {

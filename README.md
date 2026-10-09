@@ -27,26 +27,32 @@ report starts — this is not an emergency line.
 
 ## Voice and AI
 
-### Two-way reporting — OpenAI **GPT-Live** (`gpt-live-1`)
-- The browser opens a WebRTC connection and posts its SDP offer to
-  [`/api/live-session`](./api/live-session.ts). The function creates the Live session with the
-  project key (`POST /v1/live/sessions`) and returns the SDP answer — the browser never holds
-  an OpenAI key.
-- **Full duplex**: the interviewer speaks first, the caller talks naturally and can interrupt.
-  Pacing, backchannels, interruptions and silence are prompt policy.
-- **Personas**: businesses get a warm interviewer that knows their storefront (read from the
-  database, never the request) and works through *what, where, when, who, vehicles, contact*
-  one question at a time; officers get a terse intake assistant. Spanish callers are answered
-  in Spanish.
-- The interviewer **delegates** to a Responses backend (`gpt-5.6-terra`, effort `low`) that
-  owns the `file_incident_report` tool: category, priority, headline, description, location,
-  time, flags, and structured **subjects** and **vehicles**. The tool call arrives on the
-  `oai-events` data channel; the browser fills the draft live, answers the tool, and the
-  interviewer reads back a one-sentence confirmation.
+### Two-way reporting — an ElevenLabs agent with the **Eleven v4** voice
+- The interviewer is an **ElevenLabs agent** (ElevenAgents) speaking with **Eleven v4**.
+  ElevenLabs runs speech recognition (Downtown street names boosted), turn-taking,
+  interruptions and the voice; the agent's brain is `gpt-5.6-terra`. Its definition lives in
+  [`api/_lib/voiceAgent.ts`](./api/_lib/voiceAgent.ts) — `npx tsx scripts/voice-agent.ts`
+  creates or updates it (safe to re-run) and prints the id for `ELEVENLABS_AGENT_ID`.
+- The browser asks [`/api/voice-session`](./api/voice-session.ts) for a one-time WebRTC
+  conversation token (signed-in members only, 6 call starts per 10 minutes; the ElevenLabs key
+  never leaves the server) and for who is calling, read from the database — never the
+  request — then joins the agent with `@elevenlabs/client` (loaded only when a call starts).
+- **Personas**: businesses get a warm interviewer that knows their storefront and works through
+  *what, where, when, who, vehicles, contact* one question at a time; officers get a terse
+  intake assistant. Spanish callers are answered in Spanish. The caller can interrupt any time.
+- The agent fills the draft through its `file_incident_report` **client tool**, which runs in
+  the browser: category, priority, headline, description, location, time, flags, and
+  structured **subjects** and **vehicles**. It says "filing that now" first, reads back a
+  one-sentence confirmation, files again when the caller adds a detail, and hangs up after
+  goodbye. Callers hear the voice they picked for spoken alerts (George by default).
+- Private by design: a token from our server is required, no audio is recorded, and transcripts
+  are deleted after 30 days. Measured on a real call: the voice starts ≈2.1–2.6 s after the
+  caller stops talking (≈1.8–2.2 s with `eleven_v4_turbo`).
+- **Fallback:** without `ELEVENLABS_AGENT_ID`, the OpenAI **GPT-Live** line
+  ([`/api/live-session`](./api/live-session.ts), `gpt-live-1`) takes the call.
 - **Fairness built in**: no race field anywhere; the interviewer asks what the person *did* and
   for clothing and identifying details rather than appearance; it never promises a response
   time. Anyone in danger is told to call 9-1-1.
-- The data channel is locked to a short allow-list of client events.
 
 ### Speech — ElevenLabs **Eleven v4**
 - [`/api/tts`](./api/tts.ts) streams `audio/mpeg` from ElevenLabs with the key kept server-side
@@ -144,11 +150,15 @@ writing reports in the original format, so deploying the new UI before migrating
    `SEND_EMAIL_HOOK_SECRET`.
 
 ### 3. OpenAI
-Set `OPENAI_API_KEY`. Everything else has a default (see the table below).
+Set `OPENAI_API_KEY` (extraction, the shift briefing, transcription and the GPT-Live fallback).
+Everything else has a default (see the table below).
 
 ### 4. ElevenLabs
-Set `ELEVENLABS_API_KEY` (a key with text-to-speech access; `voices_read` lets users pick from
+Set `ELEVENLABS_API_KEY` (text-to-speech and Agents access; `voices_read` lets users pick from
 the account's own voices). `ELEVENLABS_MODEL` defaults to `eleven_v4`.
+
+For voice interviews, create the agent once — `ELEVENLABS_API_KEY=… npx tsx scripts/voice-agent.ts`
+— and set the printed `ELEVENLABS_AGENT_ID`. Re-run it after changing `api/_lib/voiceAgent.ts`.
 
 ### 5. Environment variables
 Copy [`.env.example`](./.env.example). `VITE_…` variables go into the client build; the rest
@@ -164,12 +174,14 @@ are **server-only** Vercel variables.
 | `VITE_IMAGE_OPTIMIZER` | client | `off` loads brand images straight from the CDN |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | server | admin DB access, session minting, caller context |
 | `SITE_URL` | server | WebAuthn + email links |
-| `OPENAI_API_KEY` | server | GPT-Live, extraction, briefing, transcription |
+| `OPENAI_API_KEY` | server | extraction, briefing, transcription, GPT-Live fallback |
 | `OPENAI_LIVE_MODEL`, `OPENAI_LIVE_VOICE` | server | defaults `gpt-live-1`, `marin` |
 | `OPENAI_LIVE_BACKEND_MODEL`, `OPENAI_LIVE_BACKEND_EFFORT` | server | interviewer backend, defaults `gpt-5.6-terra`, `low` |
 | `OPENAI_TRANSCRIBE_MODEL` | server | default `gpt-4o-mini-transcribe` |
 | `OPENAI_EXTRACT_MODEL`, `OPENAI_BRIEFING_MODEL`, `OPENAI_TEXT_MODEL` | server | optional text-model overrides |
-| `ELEVENLABS_API_KEY` | server | Eleven v4 speech |
+| `ELEVENLABS_API_KEY` | server | Eleven v4 speech and the voice interviewer |
+| `ELEVENLABS_AGENT_ID` | server | the voice interviewer agent (from `scripts/voice-agent.ts`); unset = GPT-Live fallback |
+| `ELEVENLABS_AGENT_TTS_MODEL`, `ELEVENLABS_AGENT_LLM` | script | agent voice model and brain: defaults `eleven_v4`, `gpt-5.6-terra` |
 | `ELEVENLABS_MODEL`, `ELEVENLABS_FALLBACK_MODEL`, `ELEVENLABS_VOICE_ID` | server | defaults `eleven_v4`, `eleven_multilingual_v2`, George |
 | `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
@@ -227,7 +239,8 @@ clickable transcript and `?t=` deep links (each chapter's QR code in the film op
 ```
 api/
   _lib/              auth, Supabase admin, http, OpenAI + ElevenLabs clients, incident vocabulary
-  live-session.ts    GPT-Live interviewer (personas, delegation backend, report tool)
+  voice-session.ts   voice line: ElevenLabs agent token + caller context (GPT-Live fallback)
+  live-session.ts    GPT-Live interviewer — the fallback line
   tts.ts             ElevenLabs Eleven v4 speech + voice list
   briefing.ts        AI shift briefing
   reports/extract.ts text → structured report draft
@@ -245,6 +258,7 @@ src/
                      announce (spoken copy), schema detection, media, geo, format
   data/demo.ts       demo-mode dataset
 scripts/api-harness.ts   mocked-upstream tests for the voice and AI endpoints
+scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
 ```
 

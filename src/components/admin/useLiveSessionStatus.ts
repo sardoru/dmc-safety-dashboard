@@ -11,11 +11,11 @@ interface Result {
   status: LiveSessionStatus;
 }
 
-function isLiveInfo(v: unknown): v is { configured: unknown; model?: unknown; voice?: unknown } {
+function isLiveInfo(v: unknown): v is { configured: unknown; provider?: unknown; model?: unknown } {
   return typeof v === 'object' && v !== null && 'configured' in v;
 }
 
-/** GPT-Live interviewer status from `GET /api/live-session` (connected deployments only). */
+/** Voice interviewer status from `GET /api/voice-session` (connected deployments only). */
 export function useLiveSessionStatus(enabled: boolean): LiveSessionState {
   const [nonce, setNonce] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
@@ -23,7 +23,7 @@ export function useLiveSessionStatus(enabled: boolean): LiveSessionState {
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    apiFetch<unknown>('/api/live-session')
+    apiFetch<unknown>('/api/voice-session')
       .then((data) => {
         if (cancelled) return;
         if (!isLiveInfo(data)) {
@@ -39,8 +39,8 @@ export function useLiveSessionStatus(enabled: boolean): LiveSessionState {
           status: {
             loading: false,
             configured: data.configured === true,
+            provider: data.provider === 'elevenlabs' || data.provider === 'gpt-live' ? data.provider : null,
             model: typeof data.model === 'string' ? data.model : undefined,
-            voice: typeof data.voice === 'string' ? data.voice : undefined,
           },
         });
       })
@@ -63,8 +63,8 @@ export function useLiveSessionStatus(enabled: boolean): LiveSessionState {
   return {
     loading: true,
     configured: result?.status.configured ?? null,
+    provider: result?.status.provider,
     model: result?.status.model,
-    voice: result?.status.voice,
     recheck,
   };
 }

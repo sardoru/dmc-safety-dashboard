@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Keyboard, Mic, MicOff, PhoneOff, ShieldCheck, Sparkles } from 'lucide-react';
-import { LiveSession, type CapturedReport, type LiveStatus } from '../../lib/live';
-import { apiFetch } from '../../lib/api';
+import { ArrowRight, Keyboard, LogIn, Mic, MicOff, PhoneOff, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { ElevenSession } from '../../lib/elevenSession';
+import { LiveSession, type CapturedReport, type LiveCallbacks, type LiveStatus } from '../../lib/live';
+import { ApiError, apiFetch } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useVoice } from '../../context/VoiceContext';
 import { cn } from '../../lib/format';
 import BrandImage from '../brand/BrandImage';
-import { Button } from '../ui/Button';
+import { Button, ButtonLink } from '../ui/Button';
 import { Banner } from '../ui/Feedback';
 import VoiceOrb, { type OrbMode } from '../voice/VoiceOrb';
 import DraftPreview from './DraftPreview';
@@ -27,10 +28,24 @@ interface VoiceInterviewProps {
   onUseForm: () => void;
 }
 
-interface LiveConfig {
+interface VoiceConfig {
   configured: boolean;
-  model?: string;
-  voice?: string;
+  /** `elevenlabs`: the Eleven v4 agent. `gpt-live`: the OpenAI fallback. */
+  provider?: 'elevenlabs' | 'gpt-live' | null;
+  model?: string | null;
+}
+
+/** Either voice line — both take the same callbacks. */
+interface VoiceLine {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  setMuted(muted: boolean): void;
+}
+
+interface ConfigProblem {
+  /** `auth`: the sign-in expired. `unreachable`: the check itself failed. */
+  kind: 'auth' | 'unreachable';
+  detail: string;
 }
 
 function mmss(ms: number): string {
@@ -39,14 +54,17 @@ function mmss(ms: number): string {
 }
 
 /**
- * Two-way voice reporting on OpenAI GPT-Live: the interviewer greets first,
- * asks the follow-up questions, and files the structured report — which
- * appears in the draft beside the conversation.
+ * Two-way voice reporting: an ElevenLabs agent speaking with Eleven v4 (or the
+ * OpenAI GPT-Live line where that agent isn't set up). The interviewer greets
+ * first, asks the follow-up questions, and files the structured report —
+ * which appears in the draft beside the conversation.
  */
 export default function VoiceInterview({ draft, onCapture, onTranscript, onReview, onUseForm }: VoiceInterviewProps) {
   const { isDemo, role } = useAuth();
-  const { unlock } = useVoice();
-  const [config, setConfig] = useState<LiveConfig | null>(null);
+  const { unlock, prefs, info } = useVoice();
+  const [config, setConfig] = useState<VoiceConfig | null>(null);
+  const [problem, setProblem] = useState<ConfigProblem | null>(null);
+  const [checkNonce, setCheckNonce] = useState(0);
   const [status, setStatus] = useState<LiveStatus>('idle');
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -56,7 +74,7 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
   const [elapsed, setElapsed] = useState(0);
   const [filedCount, setFiledCount] = useState(0);
 
-  const session = useRef<LiveSession | null>(null);
+  const session = useRef<VoiceLine | null>(null);
   const levels = useRef({ user: 0, assistant: 0 });
   const seq = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
@@ -67,21 +85,29 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
     onTranscriptRef.current = onTranscript;
   }, [onCapture, onTranscript]);
 
-  // Is GPT-Live configured on this deployment?
+  // Which voice line does this deployment have? A failed check is reported as
+  // what it is (an expired sign-in, an unreachable server) — not as "not set up".
   useEffect(() => {
     if (isDemo) return;
     let cancelled = false;
-    apiFetch<LiveConfig>('/api/live-session')
+    apiFetch<VoiceConfig>('/api/voice-session')
       .then((c) => {
-        if (!cancelled) setConfig(c);
+        if (cancelled) return;
+        setConfig(c && typeof c === 'object' && 'configured' in c ? c : { configured: false });
+        setProblem(null);
       })
-      .catch(() => {
-        if (!cancelled) setConfig({ configured: false });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status = err instanceof ApiError ? err.status : 0;
+        setProblem({
+          kind: status === 401 ? 'auth' : 'unreachable',
+          detail: err instanceof Error ? err.message : 'Request failed',
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [isDemo]);
+  }, [isDemo, checkNonce]);
 
   // End the call if the page unmounts.
   useEffect(
@@ -112,12 +138,13 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
   }, [lines]);
 
   const start = async () => {
+    if (!config?.configured) return;
     unlock();
     setError('');
     setLines([]);
     setFiledCount(0);
     setMuted(false);
-    const s = new LiveSession({
+    const callbacks: LiveCallbacks = {
       onStatus: (st) => {
         setStatus(st);
         if (st === 'connected') setStartedAt(Date.now());
@@ -138,7 +165,11 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
         onCaptureRef.current(r);
       },
       onError: (m) => setError(m),
-    });
+    };
+    const s: VoiceLine =
+      config.provider === 'elevenlabs'
+        ? new ElevenSession(callbacks, { voiceId: prefs.voiceId ?? undefined })
+        : new LiveSession(callbacks);
     session.current = s;
     await s.start();
   };
@@ -156,11 +187,50 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
     setMuted(next);
   };
 
+  // The interviewer speaks in the member's chosen dashboard voice, else the default one.
+  const elevenVoiceId = prefs.voiceId ?? info.defaultVoiceId;
+  const elevenVoice = elevenVoiceId ? info.voices.find((v) => v.id === elevenVoiceId)?.name : undefined;
   const connected = status === 'connected';
   const connecting = status === 'connecting';
   const ended = status === 'closed' || status === 'error';
   const orbMode: OrbMode = connecting ? 'connecting' : connected ? (muted ? 'muted' : speaking ? 'speaking' : 'listening') : ended ? 'ended' : 'idle';
   const hasDraft = Boolean(draft.category || draft.description);
+
+  const retryCheck = () => {
+    setProblem(null);
+    setCheckNonce((n) => n + 1);
+  };
+
+  if (!isDemo && problem) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+        <div className="card flex flex-col items-center p-8 text-center">
+          <BrandImage name="illoVoice" width={320} alt="" className="mb-2 h-44 w-44 object-contain" fallback={<VoiceOrb mode="idle" levels={levels} size={170} className="mb-4" />} />
+          <h2 className="text-lg font-bold text-ink">Report by voice</h2>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
+            {problem.kind === 'auth'
+              ? 'Your sign-in has expired, so the voice line can’t start. Sign in again, then come back to this report.'
+              : `Couldn’t reach the voice line (${problem.detail}). Check your connection and try again, or use the guided form.`}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {problem.kind === 'auth' ? (
+              <ButtonLink to="/login" state={{ from: '/report' }} icon={<LogIn className="h-4 w-4" />}>
+                Sign in again
+              </ButtonLink>
+            ) : (
+              <Button icon={<RefreshCw className="h-4 w-4" />} onClick={retryCheck}>
+                Try again
+              </Button>
+            )}
+            <Button variant="secondary" icon={<Keyboard className="h-4 w-4" />} onClick={onUseForm}>
+              Use the guided form
+            </Button>
+          </div>
+        </div>
+        <HowItWorks />
+      </div>
+    );
+  }
 
   if (isDemo || (config && !config.configured)) {
     return (
@@ -171,7 +241,7 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">
             {isDemo
               ? 'The two-way voice interview runs on the connected deployment: an automated interviewer greets you, asks the right follow-up questions, and fills in the report while you talk.'
-              : 'Voice interviews aren’t configured on this deployment yet (OPENAI_API_KEY). Use the guided form instead — it works the same way.'}
+              : 'Voice reporting isn’t set up on this deployment yet. Use the guided form instead — it works the same way.'}
           </p>
           <Button className="mt-6" icon={<Keyboard className="h-4 w-4" />} onClick={onUseForm}>
             Use the guided form
@@ -202,7 +272,11 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
                   : 'Ready when you are'}
           </p>
           <p className="mt-1 text-[12px] text-navy-200">
-            {connected ? `${mmss(elapsed)}${config?.voice ? ` · voice “${config.voice}”` : ''}` : 'Speak naturally — like calling a dispatcher'}
+            {connected
+              ? `${mmss(elapsed)}${config?.provider === 'elevenlabs' ? ` · ${elevenVoice ? `Eleven v4 · ${elevenVoice}` : 'Eleven v4'}` : ''}`
+              : config
+                ? 'Speak naturally — like calling a dispatcher'
+                : 'Checking the voice line…'}
           </p>
 
           <div className="mt-5 flex items-center gap-3">
@@ -232,7 +306,8 @@ export default function VoiceInterview({ draft, onCapture, onTranscript, onRevie
               <button
                 type="button"
                 onClick={() => void start()}
-                className="inline-flex h-12 items-center gap-2 rounded-full bg-gold-400 px-7 text-[15px] font-bold text-navy-900 shadow-lg shadow-black/20 transition-transform hover:bg-gold-300 active:scale-[0.98]"
+                disabled={!config?.configured}
+                className="inline-flex h-12 items-center gap-2 rounded-full bg-gold-400 px-7 text-[15px] font-bold text-navy-900 shadow-lg shadow-black/20 transition-transform hover:bg-gold-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
               >
                 <Mic className="h-5 w-5" /> {ended ? 'Start a new call' : 'Start voice interview'}
               </button>

@@ -1,5 +1,15 @@
 import { supabase } from './supabase';
 
+/** A failed API call: the server's message, plus the HTTP status. */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export interface ApiOptions extends Omit<RequestInit, 'body'> {
   /** JSON body — serialized and sent with the correct content-type header. */
   json?: unknown;
@@ -40,7 +50,7 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {})
         : typeof parsed === 'string' && parsed
           ? parsed
           : `Request failed (${res.status})`;
-    throw new Error(msg);
+    throw new ApiError(msg, res.status);
   }
 
   return parsed as T;
