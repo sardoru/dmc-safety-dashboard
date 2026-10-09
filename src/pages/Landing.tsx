@@ -258,7 +258,7 @@ export default function Landing() {
                 both — when your hands are full or you’re on patrol.
               </p>
               <div className="relative mt-8 hidden overflow-hidden rounded-3xl border border-line lg:block">
-                <BrandImage name="mainStreet" width={640} alt="Main Street at night with the trolley" className="h-72 w-full object-cover" fallback={<div className="h-72 bg-brand-night" />} />
+                <BrandImage name="mainStreet" width={640} alt="Main Street at night: the trolley under the Orpheum sign" className="h-72 w-full object-cover object-[50%_24%]" fallback={<div className="h-72 bg-brand-night" />} />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
