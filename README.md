@@ -78,10 +78,11 @@ report starts — this is not an emergency line.
   `gpt-5.6-luna` → `gpt-4.1-mini`) so a renamed model never takes a feature down.
 
 ### Imagery — Higgsfield
-The skyline hero, Main Street photo and the spot illustrations were generated with
-**Higgsfield** for this redesign. They are served from Higgsfield's CDN through **Vercel Image
-Optimization** (`/_vercel/image`, configured in [`vercel.json`](./vercel.json) → `images`),
-which resizes them and converts to AVIF/WebP. Every image has a gradient fallback.
+The skyline and the Main Street picture (the trolley under the Orpheum sign) are the owner's, in
+`public/brand/` (keep the skyline's credit mark). The spot illustrations were generated with
+**Higgsfield** for this redesign and are served from its CDN. All of them go through **Vercel
+Image Optimization** (`/_vercel/image`, configured in [`vercel.json`](./vercel.json) →
+`images`), which resizes them and converts to AVIF/WebP. Every image has a gradient fallback.
 
 ---
 
@@ -97,7 +98,7 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
 
 - **Frontend:** React Router app with role-based workspaces (`/home`, `/ops`, `/report`,
   `/bolo`, `/insights`, `/admin`, `/account`) and public pages (`/welcome`, `/login`, `/join`,
-  `/live`, `/how-it-works`, `/how-to-report`), Leaflet maps (CARTO tiles), a small design
+  `/live`, `/how-it-works`, `/how-to-report`, `/how-to-join`), Leaflet maps (CARTO tiles), a small design
   system in [`src/components/ui`](./src/components/ui), and contexts for auth, incidents,
   BOLOs, voice, theme and toasts.
 - **Backend:** stateless functions under [`/api`](./api). They hold every secret — the browser
@@ -242,7 +243,7 @@ the screen awake where the browser allows it, hides the cursor and scales from a
 
 ## Films
 
-Two films, each with chapters, a clickable transcript and `?t=` deep links (each chapter's
+Three films, each with chapters, a clickable transcript and `?t=` deep links (each chapter's
 QR code in the film opens one):
 
 - **https://www.901safety.com/how-it-works** — the 5:53 tour of the dashboard and the Ops Center
@@ -252,22 +253,32 @@ QR code in the film opens one):
   officers respond. Its voice chapter is a real call on the voice line; the transcript labels the
   call's own lines ("Interviewer:", "Caller:"). Linked from the landing page, the report page and
   the first film.
+- **https://www.901safety.com/how-to-join** — the 3:08 how-to (light) for Downtown businesses and
+  local stakeholders: who can join, register with only an email, join with an access code, set up
+  the storefront and a passkey, take part every day (nearby alerts, your block, spoken alerts), the
+  Lookout board, and the public live map. Linked from the landing page, the sign-in page and
+  `/join`.
+
+All three show the demo's sample report DT-0119, "Man trying car door handles on S Main St", from
+Ortega's Corner Market, 254 S Main St (`src/data/demo.ts`).
 
 How they're wired:
 
-- Each page is its own Vite entry — [`how-it-works.html`](./how-it-works.html) and
-  [`how-to-report.html`](./how-to-report.html) → `src/film/main.tsx` / `reportMain.tsx`, sharing
-  `FilmPage.tsx` — so link previews get real video tags without running the app, and each page
-  bundles only its own transcript.
+- Each page is its own Vite entry — [`how-it-works.html`](./how-it-works.html),
+  [`how-to-report.html`](./how-to-report.html) and [`how-to-join.html`](./how-to-join.html) →
+  `src/film/main.tsx` / `reportMain.tsx` / `joinMain.tsx`, sharing `FilmPage.tsx` — so link
+  previews get real video tags without running the app, and each page bundles only its own
+  transcript.
 - Each film is made in its own HyperFrames project (`~/videos/dmc-safety-how-it-works`,
-  `~/videos/dmc-safety-how-to-report`). To bring a new cut in:
-  `node scripts/film-data.mjs <project>/renders [YYYY-MM-DD] [--film how-it-works|how-to-report]`
+  `~/videos/dmc-safety-how-to-report`, `~/videos/dmc-safety-how-to-join`). To bring a new cut in:
+  `node scripts/film-data.mjs <project>/renders [YYYY-MM-DD] [--film how-it-works|how-to-report|how-to-join]`
   — it copies the web MP4, poster and captions into `public/video/` (or
-  `public/video/how-to-report/`), regenerates the film's data module (`src/film/filmData.ts` or
-  `reportFilmData.ts`) and its length in `filmMeta.ts`, fills the page's VideoObject, and
-  refuses wording the product doesn't use ("AI", vendor names).
-- The share cards come from `node scripts/og-images.mjs` (`--only how-to-report` for just that
-  one).
+  `public/video/how-to-report/`, `public/video/how-to-join/`), regenerates the film's data module
+  (`src/film/filmData.ts`, `reportFilmData.ts` or `joinFilmData.ts`) and its length in
+  `filmMeta.ts`, fills the page's VideoObject, and refuses wording the product doesn't use ("AI",
+  vendor names). A film's links on the site appear only once its length is set.
+- The share cards come from `node scripts/og-images.mjs` (`--only how-to-report` or
+  `--only how-to-join` for just that one).
 
 ---
 
