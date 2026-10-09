@@ -3,7 +3,7 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [0.4.7] — 2026-10-09 — Private report fields stay private
+## [0.4.8] — 2026-10-09 — Private report fields stay private
 
 ### Security
 - **Other members' private report fields no longer reach a business's browser.** Every signed-in
@@ -64,7 +64,7 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 ### Verified
 - SQL test 45/45 on PostgreSQL 17 with a Supabase stand-in, and three deliberately broken
   versions of 0007 each caught.
-- API harness 216/216 (21 new: the dashboard reads exactly the columns 0007 creates and none is
+- API harness 279/279 (21 new: the dashboard reads exactly the columns 0007 creates and none is
   private; the copy mapping; the member list rules — your own report never announced to you, a
   report shared later never rings as new, rows left from before the switch-over replaced;
   `/api/display` never selects private columns).
@@ -73,6 +73,61 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   alerts, the sheet and "Mark as seen" worked; an officer still received everything. With the app
   deployed before 0007, an open member dashboard switched over by itself when 0007 was applied.
   Demo mode unchanged.
+
+## [0.4.7] — 2026-10-09 — Paced invitations
+
+> **Before first use:** apply `supabase/migrations/0006_invite_queue.sql`, set `CRON_SECRET` in
+> Vercel → Production, then deploy (`vercel --prod`).
+
+### Added
+- **Admin → Team → Invite a list.** Paste the addresses from a meeting list — one per line; `Name
+  <email>`, `"Last, First" <email>`, spreadsheet columns and stray commas or semicolons all work —
+  pick the role (Member business by default, with the same hints as Invite someone; a warning for
+  officer and administrator lists) and an optional label ("Safety Meeting · Mar 11"). The paste is
+  counted as you type, repeats are left out and lines that aren't addresses are listed with their
+  line numbers. A confirm step says "N invitations will go out 5 every 15 minutes, starting about
+  HH:MM. You can pause any time.", when the last should go out, and how many are already waiting.
+- **The queue, on the same card:** counts (queued · sent · skipped · failed · cancelled), "Next 5 at
+  HH:MM", the next batch (each one can be cancelled), recent results with status chips and readable
+  outcomes, **Pause / Resume** and **Cancel the rest** (with a confirm). It reloads about 30 seconds
+  after each run while invitations are waiting. Light and dark, phone widths, and sample data in
+  demo mode.
+- **`/api/cron/invites`**, a Vercel Cron every 15 minutes (`vercel.json`). It answers only to
+  `Authorization: Bearer $CRON_SECRET` (401 otherwise) and fails closed (503) while the secret is
+  unset. Paused: nothing happens. Otherwise it puts rows stuck in "sending" for 30 minutes back in
+  the queue (failed after 3 tries), claims up to the per-run count (5) and invites each one about
+  600 ms apart — the same invitation Invite someone sends, from the administrator who queued it,
+  with their name in the email. People who have already signed in are skipped ("Already a
+  member"); someone invited before who never signed in gets the invitation again. Each row ends
+  sent, skipped, failed or cancelled with a readable outcome, and one failure never stops the
+  others. A rate limit puts the row back for the next run; a run starts no new send after 20 s.
+- **`/api/admin/invite-queue`** (administrators only; every change audited): `add` (counts added,
+  duplicates, invalid and skipped — addresses already waiting are skipped, also when two
+  administrators queue the same address at once), `list`, `pause`, `resume`, and `cancel` (one
+  invitation, a label's, or all still waiting).
+- **Migration `0006_invite_queue.sql`** (additive, idempotent): `invite_queue` (one live row per
+  address while queued or sending), the one-row `invite_queue_settings` (`paused`, `per_run` 1–10,
+  default 5), and `claim_queued_invites(n)`, which hands each row to exactly one run (`FOR UPDATE
+  SKIP LOCKED`) and only the service role may call. RLS on, no policies, no browser access.
+- Activity shows the queue's entries — queued invitations, paused / resumed, cancelled — and marks
+  invitations sent from a list.
+
+### Changed
+- One invitation, one code path: `api/_lib/invite.ts` does for one address what
+  `/api/officers/invite` did (never-lower, the open-invite rows, the role-specific email, the audit
+  entry); the endpoint and the list both use it. Invite someone answers and audits exactly as before.
+
+### Verified
+- API harness 258/258 (63 new): administrator-only access; parsing, de-duplication and invalid
+  lines; skipping addresses already queued; cron auth (none or wrong → 401, unset secret → 503);
+  paused runs send nothing; exactly the per-run count claimed, oldest first, ~600 ms apart; two
+  runs at once never send a row twice; one failure doesn't stop the others; rate limits and stuck
+  rows; the already-a-member skip; a queuer who's no longer an administrator; the time budget;
+  cancel; audit entries; the inviter's name in the email; a queued invitation is byte-for-byte the
+  email Invite someone sends, and Invite someone's answer and audit entry are unchanged.
+- Migration 0006 applied twice to Postgres 17 after 0001–0005: claims are atomic and disjoint under
+  two concurrent sessions, and anon / authenticated can't read the tables or run the claim. The API
+  and the cron also ran end to end against PostgREST on that database.
 
 ## [0.4.6] — 2026-10-09 — Email from 901safety.com, replies relayed
 
