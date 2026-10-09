@@ -5,7 +5,7 @@
 --   dropdb --if-exists dmc_0007_test; createdb dmc_0007_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0007_test -f supabase/tests/0007_community_report_privacy.test.sql
 --
 -- It stands in for Supabase (auth.uid(), roles, storage, the Realtime
--- publication), applies 0001–0005, files reports as real members would, applies
+-- publication), applies 0001–0006, files reports as real members would, applies
 -- 0007, checks who can read what, checks the triggers, then applies 0007 again.
 -- Each check prints "PASS …" (query results are hidden); the first failure
 -- stops psql with a non-zero exit.
@@ -116,7 +116,7 @@ create table test.snap (label text primary key, fingerprint text, xmins text);
 grant all on all functions in schema test to public;
 grant select on all tables in schema test to public;
 
--- ── migrations 0001–0005 ─────────────────────────────────────────────────────
+-- ── migrations 0001–0006 ─────────────────────────────────────────────────────
 
 set client_min_messages = warning;  -- quiet the migrations' "does not exist, skipping"
 \ir ../migrations/0001_init.sql
@@ -124,6 +124,7 @@ set client_min_messages = warning;  -- quiet the migrations' "does not exist, sk
 \ir ../migrations/0003_write_guards.sql
 \ir ../migrations/0004_membership_and_public_map.sql
 \ir ../migrations/0005_display_links.sql
+\ir ../migrations/0006_invite_queue.sql
 set client_min_messages = notice;
 
 -- ── people ───────────────────────────────────────────────────────────────────
