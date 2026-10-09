@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { captureReport } from './reportTool';
 
 export type LiveStatus = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
 
@@ -495,31 +496,15 @@ export class LiveSession {
 
   private runTool(name: string, rawArgs: string): Record<string, unknown> {
     if (name !== this.toolName) return { filed: false, error: `Unknown tool: ${name || '(unnamed)'}` };
-    let args: Partial<CapturedReport> | null;
+    let args: unknown;
     try {
-      args = JSON.parse(rawArgs || '{}') as Partial<CapturedReport> | null;
+      args = JSON.parse(rawArgs || '{}');
     } catch {
       return { filed: false, error: 'The arguments were not valid JSON; nothing was filed.' };
     }
-    if (!args || typeof args.category !== 'string' || typeof args.description !== 'string' || !args.description.trim()) {
-      return { filed: false, error: 'category and description are required; nothing was filed.' };
-    }
-    const report: CapturedReport = {
-      ...args,
-      category: args.category,
-      description: args.description.trim(),
-      location_hint: typeof args.location_hint === 'string' ? args.location_hint.trim() : undefined,
-      subjects: Array.isArray(args.subjects) ? args.subjects.slice(0, 6) : [],
-      vehicles: Array.isArray(args.vehicles) ? args.vehicles.slice(0, 6) : [],
-    };
-    this.cb.onReport?.(report);
-    return {
-      filed: true,
-      category: report.category,
-      priority: report.priority ?? null,
-      location_hint: report.location_hint || (report.at_reporter_location ? "the caller's business" : null),
-      note: "The draft report is on the caller's screen; they will review it, add photos and press submit to send it to the officers.",
-    };
+    const { report, result } = captureReport(args);
+    if (report) this.cb.onReport?.(report);
+    return result;
   }
 
   private handleMessage(raw: string): void {

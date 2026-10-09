@@ -159,20 +159,20 @@ export default function SystemPanel({ health, live }: SystemPanelProps) {
         <IntegrationCard
           icon={<Mic className="h-[18px] w-[18px]" />}
           title="Voice interviewer"
-          provider="OpenAI GPT-Live"
+          provider={live.provider === 'gpt-live' ? 'OpenAI GPT-Live (fallback)' : 'ElevenLabs Eleven v4'}
           health={health.voice}
           footer={!isDemo && <RecheckButton onClick={live.recheck} busy={live.loading} />}
         >
           {isDemo ? (
             <>
               <p>
-                Businesses and officers can file a report by talking it through with a GPT-Live interviewer that asks the
-                follow-up questions. Available on the connected deployment.
+                Businesses and officers can file a report by talking it through with an interviewer that asks the
+                follow-up questions, in an Eleven v4 voice. Available on the connected deployment.
               </p>
               <EnvList title="On the connected deployment" vars={ENV_VOICE} />
             </>
           ) : live.loading ? (
-            <p className="text-muted">Asking /api/live-session…</p>
+            <p className="text-muted">Asking /api/voice-session…</p>
           ) : live.error ? (
             <>
               <p>
@@ -183,11 +183,14 @@ export default function SystemPanel({ health, live }: SystemPanelProps) {
             </>
           ) : live.configured ? (
             <>
-              <p>Callers talk with the interviewer and it files a structured report for officers.</p>
+              <p>
+                Callers talk with the interviewer and it files a structured report for officers.
+                {live.provider === 'gpt-live' && ' This is the OpenAI fallback line — set ELEVENLABS_AGENT_ID for the Eleven v4 voice.'}
+              </p>
               <DetailList
                 items={[
-                  { label: 'Model', value: live.model ?? 'gpt-live-1', mono: true },
-                  { label: 'Voice', value: live.voice ?? 'marin', mono: true },
+                  { label: 'Engine', value: live.provider === 'gpt-live' ? 'OpenAI GPT-Live' : 'ElevenLabs agent' },
+                  { label: 'Model', value: live.model ?? '—', mono: true },
                 ]}
               />
             </>

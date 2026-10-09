@@ -3,6 +3,41 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.3.2] — 2026-10-09 — Voice interviews in an Eleven v4 voice
+
+### Changed
+- **The voice interviewer now speaks with ElevenLabs Eleven v4.** It runs as an ElevenLabs
+  agent: speech recognition (Downtown street names boosted), turn-taking, interruptions and
+  the voice are ElevenLabs'; the interview script, the 9-1-1 and fairness rules and the report
+  fields are unchanged. The agent fills the draft through a client tool in the browser, says
+  "filing that now" first, reads back what it filed, files again when the caller adds a
+  detail, and hangs up after goodbye. Callers hear the voice they picked for spoken alerts
+  (George by default).
+- `/api/voice-session` mints a one-time conversation token for signed-in members (the
+  ElevenLabs key stays on the server; 6 call starts per 10 minutes per member) and passes who
+  is calling, from the database. `scripts/voice-agent.ts` creates or updates the agent from
+  `api/_lib/voiceAgent.ts`; production's agent is `agent_4701m4fyz1bnetha6v752mnr1710`.
+- Without `ELEVENLABS_AGENT_ID`, the OpenAI GPT-Live line takes the call, as before.
+- Admin → System shows which voice engine is live.
+
+### Fixed
+- **"Voice interviews aren't configured on this deployment yet (OPENAI_API_KEY)"** appeared
+  whenever the voice check failed — an expired sign-in or a network error read as a missing
+  key. The page now says what happened ("sign in again", or "couldn't reach the voice line"
+  with Try again), and Start waits for the check.
+
+### Privacy
+- The agent is private (a token from our server is required), records no audio, and deletes
+  transcripts after 30 days.
+
+### Verified
+- A real call in a browser against the live agent, with a recorded caller as the microphone:
+  greeting, 9-1-1 guidance, one question at a time, the report filed (Suspicious Person · P2 ·
+  Main St and Gayoso Ave · the person's description) and updated, then the agent hung up.
+  Voice starts ≈2.1–2.6 s after the caller stops (≈1.8–2.2 s with `eleven_v4_turbo`).
+- API harness 66/66 (new: `/api/voice-session` — engine choice, token minting, caller context,
+  rejected key, rate limit).
+
 ## [0.3.1] — 2026-10-08 — Security + correctness review of the redesign
 
 A full review of 0.3.0 (API/RLS security, frontend correctness, voice integrations) after it
