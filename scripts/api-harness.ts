@@ -1383,11 +1383,19 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     ['AI', /\bA\.?I\b/], ['artificial intelligence', /artificial\s+intelligence/i], ['GPT', /gpt/i], ['OpenAI', /\bopen\s?ai\b/i],
     ['ElevenLabs', /eleven\s?labs/i], ['model', /\bmodels?\b/i], ['machine learning', /machine[\s-]+learning/i], ['bot', /\b(?:chat)?bots?\b/i], ['smart', /\bsmart/i],
   ];
-  const wordHits = ['api/_lib/inviteQueue.ts', 'api/admin/invite-queue.ts', 'api/cron/invites.ts', 'api/_lib/emailList.ts'].flatMap((file) => {
+  const wordHits = [
+    'api/_lib/inviteQueue.ts',
+    'api/admin/invite-queue.ts',
+    'api/cron/invites.ts',
+    'api/_lib/emailList.ts',
+    'src/components/admin/InviteListCard.tsx',
+    'src/components/admin/inviteQueue.ts',
+    'src/components/admin/useInviteQueue.ts',
+  ].flatMap((file) => {
     const text = readFileSync(resolve(ROOT, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
     return BANNED.filter(([, re]) => re.test(text)).map(([w]) => `${file}: ${w}`);
   });
-  check('queue outcomes and messages: no AI, model, bot or smart wording', wordHits.length === 0, wordHits);
+  check('the queue’s outcomes, messages and Admin → Team card: no AI, model, bot or smart wording', wordHits.length === 0, wordHits);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

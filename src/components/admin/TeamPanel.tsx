@@ -1,4 +1,5 @@
 import InviteCard from './InviteCard';
+import InviteListCard from './InviteListCard';
 import PendingInvitesCard from './PendingInvitesCard';
 import TeamMembersCard from './TeamMembersCard';
 import type { TeamState } from './useTeam';
@@ -10,7 +11,7 @@ interface TeamPanelProps {
   currentEmail: string | null;
 }
 
-/** Admin › Team: invite, pending invitations, and the current officers. */
+/** Admin › Team: invite one person or a list, pending invitations, and the current officers. */
 export default function TeamPanel({ team, isDemo, currentUserId, currentEmail }: TeamPanelProps) {
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -22,6 +23,7 @@ export default function TeamPanel({ team, isDemo, currentUserId, currentEmail }:
           currentEmail={currentEmail}
           onChanged={team.refresh}
         />
+        <InviteListCard isDemo={isDemo} onSent={team.refresh} />
         <PendingInvitesCard
           invites={team.invites}
           loading={team.loading}
