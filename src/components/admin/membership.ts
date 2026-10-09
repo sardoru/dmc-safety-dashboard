@@ -150,13 +150,16 @@ export function describeAudit(e: AuditEntry): { verb: string; target: string | n
         typeof m.added === 'number' && plural(m.added, 'address', 'addresses'),
         typeof m.role === 'string' && `as ${m.role}`,
         typeof m.skipped === 'number' && m.skipped > 0 && `${m.skipped} already waiting`,
+        typeof m.alreadyInvited === 'number' && m.alreadyInvited > 0 && `${m.alreadyInvited} already invited, left out`,
+        m.reinvite === true && 'invited again on purpose',
       ]
         .filter(Boolean)
         .join(' · ');
       break;
     case 'queue.paused':
     case 'queue.resumed':
-      detail = typeof m.queued === 'number' ? `${m.queued} waiting` : null;
+      // The queue pauses itself when the email limit is reached (actor: System).
+      detail = typeof m.reason === 'string' ? m.reason : typeof m.queued === 'number' ? `${m.queued} waiting` : null;
       break;
     case 'queue.cancelled':
       detail = typeof m.count === 'number' ? plural(m.count, 'invitation') : null;

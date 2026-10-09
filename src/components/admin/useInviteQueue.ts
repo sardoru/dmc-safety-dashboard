@@ -1,23 +1,56 @@
 import { useCallback, useEffect, useState } from 'react';
 import { parseEmailList } from '../../../api/_lib/emailList';
+import { DEMO_BUSINESSES, DEMO_PERSONAS } from '../../data/demo';
 import { useNow } from '../../hooks/useNow';
 import { apiFetch } from '../../lib/api';
-import type { Role } from '../../types';
 import { messageOf } from '../account/util';
 import { demoQueue, fromList, nextRun, type AddResult, type QueueItem, type QueueListJson, type QueueState } from './inviteQueue';
 
 const ENDPOINT = '/api/admin/invite-queue';
 const call = <T>(json: Record<string, unknown>) => apiFetch<T>(ENDPOINT, { method: 'POST', json });
 
+/** A pasted list. Lists are for member businesses only. */
+export interface ListInput {
+  text: string;
+  label: string;
+  /** Queue people who were already invited, too (they get another invitation email). */
+  reinvite: boolean;
+}
+
 export interface InviteQueue {
   /** Null until the first load (connected mode). */
   state: QueueState | null;
   error: string | null;
   refresh: () => void;
-  add: (input: { text: string; role: Role; label: string }) => Promise<AddResult>;
+  /** What a list would queue — nothing is queued — and the queue's pace right now: for the confirm step. */
+  preview: (input: ListInput) => Promise<AddResult>;
+  add: (input: ListInput) => Promise<AddResult>;
   setPaused: (paused: boolean) => Promise<void>;
   /** One queued invitation, or every one still waiting. */
   cancel: (target: { id: string } | { all: true }) => Promise<number>;
+}
+
+/** Demo mode: the sample members count as already invited. */
+const DEMO_MEMBERS = new Set([...DEMO_BUSINESSES.map((b) => b.email), ...Object.values(DEMO_PERSONAS).map((p) => p.email)]);
+
+function demoCount(input: ListInput, s: QueueState | null) {
+  const parsed = parseEmailList(input.text);
+  const waiting = new Set(s?.next.map((i) => i.email));
+  const invited = new Set([...DEMO_MEMBERS, ...(s?.recent.filter((i) => i.status === 'sent').map((i) => i.email) ?? [])]);
+  const fresh = parsed.entries.filter((e) => !waiting.has(e.email));
+  const repeat = fresh.filter((e) => invited.has(e.email));
+  const chosen = input.reinvite ? fresh : fresh.filter((e) => !invited.has(e.email));
+  const result: AddResult = {
+    added: chosen.length,
+    duplicates: parsed.duplicates,
+    invalid: parsed.invalid.length,
+    skipped: parsed.entries.length - fresh.length,
+    alreadyInvited: input.reinvite ? 0 : repeat.length,
+    reinvited: input.reinvite ? repeat.length : 0,
+    invalidLines: parsed.invalid,
+    alreadyInvitedEmails: input.reinvite ? [] : repeat.map((e) => e.email),
+  };
+  return { chosen, result };
 }
 
 /**
@@ -54,24 +87,45 @@ export function useInviteQueue(isDemo: boolean): InviteQueue {
     return () => window.clearTimeout(t);
   }, [isDemo, state, refresh]);
 
+  const preview = useCallback(
+    async (input: ListInput): Promise<AddResult> => {
+      if (!isDemo) {
+        refresh();
+        return call<AddResult>({ action: 'add', dryRun: true, ...input });
+      }
+      const { result } = demoCount(input, state);
+      return state
+        ? {
+            ...result,
+            queue: {
+              queued: state.counts.queued,
+              perRun: state.perRun,
+              paused: state.paused,
+              everyMinutes: state.everyMinutes,
+              nextRunAt: new Date(nextRun(Date.now(), state.everyMinutes)).toISOString(),
+            },
+          }
+        : result;
+    },
+    [isDemo, refresh, state],
+  );
+
   const add = useCallback(
-    async (input: { text: string; role: Role; label: string }): Promise<AddResult> => {
+    async (input: ListInput): Promise<AddResult> => {
       if (!isDemo) {
         const result = await call<AddResult>({ action: 'add', ...input });
         refresh();
         return result;
       }
-      const parsed = parseEmailList(input.text);
-      const waiting = new Set(state?.next.map((i) => i.email));
-      const fresh = parsed.entries.filter((e) => !waiting.has(e.email));
+      const { chosen, result } = demoCount(input, state);
       setState((s) => {
         if (!s) return s;
-        const items: QueueItem[] = fresh.map((e, i) => ({
+        const items: QueueItem[] = chosen.map((e, i) => ({
           id: `demo-new-${Date.now()}-${i}`,
           email: e.email,
           name: e.name,
           label: input.label.trim() || null,
-          role: input.role,
+          role: 'business',
           status: 'queued',
           outcome: null,
           createdAt: Date.now(),
@@ -85,13 +139,7 @@ export function useInviteQueue(isDemo: boolean): InviteQueue {
           next: [...s.next, ...items].slice(0, s.perRun),
         };
       });
-      return {
-        added: fresh.length,
-        duplicates: parsed.duplicates,
-        invalid: parsed.invalid.length,
-        skipped: parsed.entries.length - fresh.length,
-        invalidLines: parsed.invalid,
-      };
+      return result;
     },
     [isDemo, refresh, state],
   );
@@ -99,7 +147,7 @@ export function useInviteQueue(isDemo: boolean): InviteQueue {
   const setPaused = useCallback(
     async (paused: boolean) => {
       if (!isDemo) await call({ action: paused ? 'pause' : 'resume' });
-      setState((s) => (s ? { ...s, paused } : s));
+      setState((s) => (s ? { ...s, paused, pauseReason: null } : s));
       if (!isDemo) refresh();
     },
     [isDemo, refresh],
@@ -128,5 +176,5 @@ export function useInviteQueue(isDemo: boolean): InviteQueue {
     [isDemo, refresh, state],
   );
 
-  return { state, error, refresh, add, setPaused, cancel };
+  return { state, error, refresh, preview, add, setPaused, cancel };
 }
