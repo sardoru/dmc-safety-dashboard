@@ -3,7 +3,7 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [0.4.6] — 2026-10-09 — Paced invitations
+## [0.4.7] — 2026-10-09 — Paced invitations
 
 > **Before first use:** apply `supabase/migrations/0006_invite_queue.sql`, set `CRON_SECRET` in
 > Vercel → Production, then deploy (`vercel --prod`).
@@ -47,7 +47,7 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   entry); the endpoint and the list both use it. Invite someone answers and audits exactly as before.
 
 ### Verified
-- API harness 241/241 (63 new): administrator-only access; parsing, de-duplication and invalid
+- API harness 258/258 (63 new): administrator-only access; parsing, de-duplication and invalid
   lines; skipping addresses already queued; cron auth (none or wrong → 401, unset secret → 503);
   paused runs send nothing; exactly the per-run count claimed, oldest first, ~600 ms apart; two
   runs at once never send a row twice; one failure doesn't stop the others; rate limits and stuck
@@ -57,6 +57,16 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 - Migration 0006 applied twice to Postgres 17 after 0001–0005: claims are atomic and disjoint under
   two concurrent sessions, and anon / authenticated can't read the tables or run the claim. The API
   and the cron also ran end to end against PostgREST on that database.
+
+## [0.4.6] — 2026-10-09 — Email from 901safety.com, replies relayed
+
+### Added
+- **Every email now comes from `safety@901safety.com`** (the domain is verified in Resend).
+- **A hidden reply relay** (`/api/inbound-email`): a reply to any email reaches the team's inbox
+  (`INBOUND_FORWARD_TO`), and the team's answer goes back from `safety@901safety.com` — their own
+  address never shows, even in quoted text. Signed webhooks only; loops and automatic replies are
+  dropped; failed sends are retried by Resend. 15 harness checks (195 total).
+- `EMAIL_REPLY_TO` (optional, from #12) for a plain reply-to when the relay is off.
 
 ## [0.4.5] — 2026-10-09 — Role-specific invitation emails
 

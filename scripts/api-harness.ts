@@ -418,8 +418,107 @@ async function main() {
   const fresh = nowSec();
   r = await runHook({ 'webhook-id': 'msg_3', 'webhook-timestamp': String(fresh), 'webhook-signature': sign('msg_3', fresh) });
   check('fresh valid signature → 200, one email sent', r.statusCode === 200 && calls.filter((c) => c.url.startsWith('https://api.resend.com/')).length === 1, { s: r.statusCode, d: r.data });
+  const resendBody = () => (calls.find((c) => c.url.startsWith('https://api.resend.com/'))?.body ?? {}) as { from?: string; reply_to?: string | string[] };
+  check('no EMAIL_REPLY_TO → no reply-to header', resendBody().reply_to === undefined, resendBody());
+  process.env.EMAIL_FROM = 'Core Downtown Memphis Safety <safety@901safety.com>';
+  process.env.EMAIL_REPLY_TO = ' help@downtown.test ';
+  calls.length = 0;
+  const fresh2 = nowSec();
+  r = await runHook({ 'webhook-id': 'msg_4', 'webhook-timestamp': String(fresh2), 'webhook-signature': sign('msg_4', fresh2) });
+  const withReply = resendBody();
+  check('EMAIL_FROM is the sender and EMAIL_REPLY_TO the reply-to', withReply.from === 'Core Downtown Memphis Safety <safety@901safety.com>' && [withReply.reply_to].flat().includes('help@downtown.test'), withReply);
+  delete process.env.EMAIL_FROM;
+  delete process.env.EMAIL_REPLY_TO;
   delete process.env.RESEND_API_KEY;
   delete process.env.SEND_EMAIL_HOOK_SECRET;
+
+  // ---------------------------------------------------------------- Inbound replies (api/inbound-email)
+  console.log('api/inbound-email');
+  const inbound = (await import(pathToFileURL(resolve(ROOT, 'api/inbound-email.ts')).href)).default as (q: never, s: never) => Promise<void>;
+  const inKey = Buffer.from('harness-inbound-secret-0123456789');
+  const runInbound = async (evt: unknown, o: { sign?: boolean; ts?: number; method?: string } = {}) => {
+    const body = JSON.stringify(evt);
+    const ts = o.ts ?? nowSec();
+    const headers: Record<string, string> = {};
+    if (o.sign !== false) {
+      headers['svix-id'] = 'msg_in';
+      headers['svix-timestamp'] = String(ts);
+      headers['svix-signature'] = `v1,${createHmac('sha256', inKey).update(`msg_in.${ts}.${body}`).digest('base64')}`;
+    }
+    const res = new MockRes();
+    await inbound({ method: o.method ?? 'POST', headers, body, query: {} } as never, res as never);
+    return res;
+  };
+  const USER_MAIL = 'aaaaaaaa-1111-2222-3333-444444444444';
+  const TEAM_MAIL = 'bbbbbbbb-1111-2222-3333-444444444444';
+  const RECEIVED: Record<string, object> = {
+    [USER_MAIL]: { id: USER_MAIL, from: 'Dana Whitfield <dana@riverbluff.test>', to: ['safety@901safety.com'], cc: null, subject: 'Re: You’re invited to the Downtown Memphis safety network', created_at: '2026-10-09T20:00:00Z', text: 'Thanks! What time is the training?', html: '<p>Thanks! What time is the training?</p>', headers: {}, message_id: '<m-user@mail.test>' },
+    [TEAM_MAIL]: { id: TEAM_MAIL, from: 'The team <team@hidden.test>', to: [`reply+${USER_MAIL}@901safety.com`], cc: null, subject: 'Re: Reply: You’re invited', created_at: '2026-10-09T20:10:00Z', text: 'Training is Tuesday at 10.\n\nFrom: Core Downtown Memphis Safety <safety@901safety.com>\nTo: The team <Team@Hidden.test>\nSubject: Reply: You’re invited', html: '<p>Training is Tuesday at 10.</p><div><b>To:</b> The team &lt;team@hidden.test&gt;</div>', headers: {}, message_id: '<m-team@mail.test>' },
+    'cccccccc-1111-2222-3333-444444444444': { id: 'cccccccc-1111-2222-3333-444444444444', from: 'Dana Whitfield <dana@riverbluff.test>', to: ['safety@901safety.com'], cc: null, subject: 'Out of office', created_at: '2026-10-09T20:00:00Z', text: 'I am away.', html: null, headers: { 'Auto-Submitted': 'auto-replied' }, message_id: '<m-auto@mail.test>' },
+  };
+  let resendSendFails = false;
+  upstream = (url) => {
+    const m = url.match(/^https:\/\/api\.resend\.com\/emails\/receiving\/([^/?]+)(\/attachments)?/);
+    if (m) return m[2] ? json(200, { object: 'list', has_more: false, data: [] }) : RECEIVED[decodeURIComponent(m[1])] ? json(200, RECEIVED[decodeURIComponent(m[1])]) : json(404, { message: 'not found' });
+    if (url === 'https://api.resend.com/emails') return resendSendFails ? json(500, { message: 'down' }) : json(200, { id: 'em_relay' });
+    return null;
+  };
+  const sends = () => calls.filter((c) => c.url === 'https://api.resend.com/emails' && c.method === 'POST').map((c) => c.body as Record<string, unknown>);
+  const userEvt = { type: 'email.received', data: { email_id: USER_MAIL, from: 'Dana Whitfield <dana@riverbluff.test>', to: ['safety@901safety.com'], subject: 'Re: You’re invited' } };
+  const teamEvt = { type: 'email.received', data: { email_id: TEAM_MAIL, from: 'The team <team@hidden.test>', to: [`reply+${USER_MAIL}@901safety.com`], subject: 'Re: Reply: You’re invited' } };
+
+  delete process.env.RESEND_WEBHOOK_SECRET;
+  r = await runInbound(userEvt);
+  check('inbound: no secret configured → 503 (fails closed)', r.statusCode === 503, r.data);
+  process.env.RESEND_WEBHOOK_SECRET = `whsec_${inKey.toString('base64')}`;
+  r = await runInbound(userEvt, { method: 'GET' });
+  check('inbound: GET → 405', r.statusCode === 405, r.data);
+  r = await runInbound(userEvt, { sign: false });
+  check('inbound: unsigned → 401', r.statusCode === 401, r.data);
+  r = await runInbound(userEvt, { ts: nowSec() - 600 });
+  check('inbound: validly signed but 10 min old → 401 (replay)', r.statusCode === 401, r.data);
+
+  process.env.RESEND_API_KEY = 're_test';
+  process.env.EMAIL_FROM = 'Core Downtown Memphis Safety <safety@901safety.com>';
+  delete process.env.INBOUND_FORWARD_TO;
+  calls.length = 0;
+  r = await runInbound(userEvt);
+  check('inbound: no forward address set → ignored, nothing sent', r.statusCode === 200 && r.data.status === 'ignored' && sends().length === 0, r.data);
+  process.env.INBOUND_FORWARD_TO = 'team@hidden.test';
+  calls.length = 0;
+  r = await runInbound({ type: 'email.sent', data: { email_id: USER_MAIL } });
+  check('inbound: other event types are ignored', r.statusCode === 200 && r.data.status === 'ignored' && sends().length === 0, r.data);
+
+  calls.length = 0;
+  r = await runInbound(userEvt);
+  const fwd = sends()[0] ?? {};
+  check('inbound: a reply is forwarded to the team from EMAIL_FROM, answerable through a reply+ address', r.statusCode === 200 && r.data.status === 'forwarded' && sends().length === 1 && JSON.stringify(fwd.to) === JSON.stringify(['team@hidden.test']) && fwd.from === 'Core Downtown Memphis Safety <safety@901safety.com>' && fwd.reply_to === `reply+${USER_MAIL}@901safety.com`, fwd);
+  check('inbound: the forward names the sender and carries the message', String(fwd.text).includes('dana@riverbluff.test') && String(fwd.text).includes('What time is the training?') && String(fwd.subject).startsWith('Reply: You’re invited'), { subject: fwd.subject, text: String(fwd.text).slice(0, 300) });
+
+  calls.length = 0;
+  r = await runInbound(teamEvt);
+  const back = sends()[0] ?? {};
+  check('inbound: the team’s answer goes back to the sender from EMAIL_FROM', r.statusCode === 200 && r.data.status === 'relayed' && JSON.stringify(back.to) === JSON.stringify(['dana@riverbluff.test']) && back.from === 'Core Downtown Memphis Safety <safety@901safety.com>' && String(back.subject) === 'Re: You’re invited to the Downtown Memphis safety network' && String(back.text).includes('Tuesday at 10'), back);
+  check('inbound: the team’s own address never reaches the sender', !JSON.stringify(back).includes('hidden.test'), back);
+  check('inbound: the answer threads under the sender’s message', (back.headers as Record<string, string> | undefined)?.['In-Reply-To'] === '<m-user@mail.test>', back.headers);
+
+  calls.length = 0;
+  r = await runInbound({ ...teamEvt, data: { ...teamEvt.data, to: ['safety@901safety.com'] } });
+  check('inbound: team mail without a reply+ thread is not sent anywhere', r.statusCode === 200 && r.data.status === 'ignored' && sends().length === 0, r.data);
+  calls.length = 0;
+  r = await runInbound({ type: 'email.received', data: { email_id: USER_MAIL, from: 'safety@901safety.com', to: ['safety@901safety.com'] } });
+  check('inbound: mail from the sending domain is dropped (no loops)', r.statusCode === 200 && r.data.status === 'ignored' && sends().length === 0, r.data);
+  calls.length = 0;
+  r = await runInbound({ type: 'email.received', data: { email_id: 'cccccccc-1111-2222-3333-444444444444', from: 'Dana Whitfield <dana@riverbluff.test>', to: ['safety@901safety.com'] } });
+  check('inbound: automatic replies are dropped', r.statusCode === 200 && r.data.status === 'ignored' && sends().length === 0, r.data);
+  resendSendFails = true;
+  r = await runInbound(userEvt);
+  check('inbound: a failed send answers 502 so Resend retries', r.statusCode === 502, r.data);
+  resendSendFails = false;
+  delete process.env.INBOUND_FORWARD_TO;
+  delete process.env.RESEND_WEBHOOK_SECRET;
+  delete process.env.EMAIL_FROM;
+  delete process.env.RESEND_API_KEY;
 
   // ---------------------------------------------------------------- Join (access codes + waitlist)
   console.log('api/join');
