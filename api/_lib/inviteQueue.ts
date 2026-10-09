@@ -102,7 +102,8 @@ const ROLE_LABEL: Record<Role, string> = { business: 'Business', officer: 'Publi
 export const OUTCOME = {
   member: 'Already a member',
   gaveUp: `Gave up after ${MAX_ATTEMPTS} tries — the send never finished. Add the address again to retry.`,
-  busy: 'The email service was busy — trying again next run',
+  busy: 'Too many at once — trying again next run',
+  stillBusy: `Couldn’t send: still too busy after ${MAX_ATTEMPTS} tries. Add the address again to retry.`,
 } as const;
 
 /** How a claimed row ends; `retry` puts it back in the queue for the next run. */
@@ -162,7 +163,11 @@ function inviterLookup(admin: SupabaseClient) {
 }
 
 const message = (err: unknown) => (err instanceof Error && err.message ? err.message : 'Something went wrong').replace(/\s+/g, ' ').trim();
+/** Rate limited (the email service's "Too many requests", a sign-in link's "rate limit exceeded"). */
 const busy = (text: string) => /too many requests|rate.?limit/i.test(text);
+/** Busy: back in the queue for the next run — until the row has had MAX_ATTEMPTS tries. */
+const busyEnd = (row: QueueRow): RowEnd =>
+  row.attempts >= MAX_ATTEMPTS ? { status: 'failed', outcome: OUTCOME.stillBusy } : { status: 'retry', outcome: OUTCOME.busy };
 
 /** Invite one claimed row the way Invite someone does — unless its address already uses the dashboard. */
 async function inviteRow(admin: SupabaseClient, row: QueueRow, inviterOf: ReturnType<typeof inviterLookup>): Promise<RowEnd> {
@@ -178,7 +183,9 @@ async function inviteRow(admin: SupabaseClient, row: QueueRow, inviterOf: Return
 
   const requested = roleOf(row.role);
   const result = await inviteByEmail(admin, email, requested, from, { via: 'queue' });
-  if (result.kind === 'no-link') return { status: 'failed', outcome: `Couldn’t make a sign-in link: ${result.error}` };
+  if (result.kind === 'no-link') {
+    return busy(result.error) ? busyEnd(row) : { status: 'failed', outcome: `Couldn’t make a sign-in link: ${result.error}` };
+  }
   if (!result.emailed) return { status: 'failed', outcome: 'Couldn’t make a sign-in link — nothing was sent' };
   const raised = result.role !== requested ? ` as ${ROLE_LABEL[result.role]} — an invitation never lowers a role` : '';
   if (result.status !== 'invited') return { status: 'sent', outcome: `Sign-in link sent — they already have an account${raised}` };
@@ -211,7 +218,7 @@ export interface RunSummary {
   skipped: number;
   failed: number;
   cancelled: number;
-  /** The email service was busy: back in the queue for the next run. */
+  /** Rate limited: back in the queue for the next run. */
   retried: number;
   /** Claimed but not started before the time budget ran out: back in the queue. */
   released: number;
@@ -265,11 +272,7 @@ export async function runQueue(admin: SupabaseClient, clock: RunClock = realCloc
       end = await inviteRow(admin, row, inviterOf);
     } catch (err) {
       const text = message(err);
-      end = busy(text)
-        ? row.attempts >= MAX_ATTEMPTS
-          ? { status: 'failed', outcome: `Couldn’t send: the email service was busy ${MAX_ATTEMPTS} times. Add the address again to retry.` }
-          : { status: 'retry', outcome: OUTCOME.busy }
-        : { status: 'failed', outcome: `Couldn’t send: ${text}` };
+      end = busy(text) ? busyEnd(row) : { status: 'failed', outcome: `Couldn’t send: ${text}` };
     }
     if (end.status === 'sent' || end.status === 'failed' || end.status === 'retry') lastMail = clock.now();
 

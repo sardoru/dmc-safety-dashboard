@@ -20,7 +20,7 @@ import { useInviteQueue } from './useInviteQueue';
 
 interface InviteListCardProps {
   isDemo: boolean;
-  /** Invitations went out since the last look — e.g. reload Pending invites. */
+  /** Invitations went out since the last look — reload the team (new accounts, open invitations). */
   onSent?: () => void;
 }
 
@@ -121,7 +121,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
   const waiting = s?.counts.queued ?? 0;
   const batch = Math.min(plan.perRun, waiting);
 
-  // As invitations go out, the Pending invites list grows: let the page reload it.
+  // As invitations go out, the team changes (new accounts, open invitations): let the page reload it.
   const lastSent = useRef<number | null>(null);
   useEffect(() => {
     if (!s) return;
@@ -313,7 +313,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
           <Banner tone="warning" title="Couldn’t load the queue">
             {q.error}
           </Banner>
-        ) : total === 0 ? (
+        ) : total === 0 && !s.paused ? (
           <p className="text-[13px] leading-relaxed text-muted">Nothing queued yet. Lists you queue show up here with each result.</p>
         ) : (
           <>
@@ -467,9 +467,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-ink-2">
-          They won’t be sent. Invitations that already went out stay sent — revoke one under Pending invites if you need to.
-        </p>
+        <p className="text-sm leading-relaxed text-ink-2">They won’t be sent. Invitations that already went out stay sent.</p>
       </Dialog>
     </Card>
   );

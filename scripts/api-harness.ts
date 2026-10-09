@@ -1039,6 +1039,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   let hideWaiting = false;
   let notMigrated = false;
   const mailFails: Record<string, () => Response> = {};
+  const linkFails: Record<string, () => Response> = {};
   const mailLog: { to: string; at: number }[] = [];
   const newRow = (f: Partial<QRow> & { email: string }): QRow => {
     seq++;
@@ -1052,6 +1053,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     queue.length = 0; claims.length = 0; mailLog.length = 0;
     Object.assign(settings, { paused: false, per_run: 5 });
     for (const k of Object.keys(mailFails)) delete mailFails[k];
+    for (const k of Object.keys(linkFails)) delete linkFails[k];
   };
   const byEmail = (email: string) => queue.find((q) => q.email === email);
 
@@ -1149,6 +1151,10 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
       const to = String((body as { to?: unknown } | null)?.to ?? '');
       mailLog.push({ to, at: Date.now() });
       if (mailFails[to]) return mailFails[to]();
+    }
+    if (url.startsWith('https://fake.supabase.co/auth/v1/admin/generate_link')) {
+      const email = String((body as { email?: unknown } | null)?.email ?? '');
+      if (linkFails[email]) return linkFails[email]();
     }
     return membershipUpstream(url, init);
   };
@@ -1303,8 +1309,16 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
   mailFails['busy@shop.test'] = tooMany;
   mailFails['busy.again@shop.test'] = tooMany;
   r = await cron(SECRET);
-  check('the email service is busy → back in the queue for the next run', byEmail('busy@shop.test')?.status === 'queued' && byEmail('busy@shop.test')?.claimed_at === null && byEmail('busy@shop.test')?.outcome === 'The email service was busy — trying again next run' && r.data.retried === 1, byEmail('busy@shop.test'));
-  check('…but not forever: still busy on the 3rd try → failed', byEmail('busy.again@shop.test')?.status === 'failed' && /busy 3 times/.test(byEmail('busy.again@shop.test')?.outcome ?? ''), byEmail('busy.again@shop.test'));
+  check('the email service is busy (429) → back in the queue for the next run', byEmail('busy@shop.test')?.status === 'queued' && byEmail('busy@shop.test')?.claimed_at === null && byEmail('busy@shop.test')?.outcome === 'Too many at once — trying again next run' && r.data.retried === 1, byEmail('busy@shop.test'));
+  check('…but not forever: still busy on the 3rd try → failed', byEmail('busy.again@shop.test')?.status === 'failed' && /still too busy after 3 tries/.test(byEmail('busy.again@shop.test')?.outcome ?? ''), byEmail('busy.again@shop.test'));
+
+  reset();
+  seed({ email: 'link.busy@shop.test' }, { email: 'link.broken@shop.test' });
+  linkFails['link.busy@shop.test'] = () => json(429, { code: 429, error_code: 'over_email_send_rate_limit', msg: 'Email rate limit exceeded' });
+  linkFails['link.broken@shop.test'] = () => json(422, { code: 422, error_code: 'validation_failed', msg: 'Unable to validate email address: invalid format' });
+  mails.length = 0;
+  r = await cron(SECRET);
+  check('no sign-in link because of a rate limit → back in the queue; any other link failure → failed, saying why; nothing emailed', byEmail('link.busy@shop.test')?.status === 'queued' && byEmail('link.busy@shop.test')?.outcome === 'Too many at once — trying again next run' && byEmail('link.broken@shop.test')?.status === 'failed' && byEmail('link.broken@shop.test')?.outcome === 'Couldn’t make a sign-in link: Unable to validate email address: invalid format' && mails.length === 0, queue.map((q) => [q.email, q.status, q.outcome]));
 
   // ── rows stuck in `sending`
   reset();
