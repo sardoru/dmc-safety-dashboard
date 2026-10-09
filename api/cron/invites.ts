@@ -7,11 +7,13 @@ import { QueueNotReady, runQueue } from '../_lib/inviteQueue.js';
 /**
  * GET /api/cron/invites — Vercel Cron, every 15 minutes (vercel.json → crons): sends the next few
  * invitations from Invite a list (Admin → Team). Vercel calls it with `Authorization: Bearer
- * $CRON_SECRET`; anything else gets 401, and without CRON_SECRET it answers 503 (fails closed).
+ * $CRON_SECRET`; anything else gets 401, and without CRON_SECRET (or with one under 16 characters) it
+ * answers 503 (fails closed).
  *
- * Paused: nothing. Otherwise it recovers rows stuck while sending, claims up to the per-run count
- * (5 by default) and invites each like Admin → Team → Invite someone, about 600 ms apart.
- * Answers with counts only — never addresses.
+ * Paused: nothing. One run per quarter hour — a duplicate delivery does nothing. Otherwise it recovers
+ * rows stuck while sending, then claims one row at a time up to the per-run count (5 by default),
+ * re-reading the pause switch before each, and invites each like Admin → Team → Invite someone, about
+ * 600 ms apart. Answers with counts only — never addresses.
  */
 function bearerMatches(header: unknown, secret: string): boolean {
   const given = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -25,6 +27,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   const secret = process.env.CRON_SECRET;
   if (!secret) return sendError(res, 503, 'CRON_SECRET is not set');
+  if (secret.length < 16) {
+    console.error('[cron/invites] CRON_SECRET is shorter than 16 characters — refusing to run. Set a longer one (openssl rand -hex 32).');
+    return sendError(res, 503, 'CRON_SECRET is too short');
+  }
   if (!bearerMatches(req.headers.authorization, secret)) return sendError(res, 401, 'Not authorized');
 
   try {
