@@ -16,7 +16,7 @@ publish be-on-the-lookout notices, and **hear new reports read aloud**.
 | --- | --- |
 | **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: **Report by voice** (an automated two-way interview — they just talk), a **guided form** that can read its questions aloud and organise dictated notes ("Organize my notes"), or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a spoken read-back confirmation. |
 | **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and a spoken **shift briefing** summarised from the last hours. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
-| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (**role-specific invitations** for businesses, officers and administrators, team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
+| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (**role-specific invitations** for businesses, officers and administrators — one at a time or a **pasted list, sent 5 every 15 minutes** — team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
 | **The public** | A **live map at [`/live`](https://www.901safety.com/live)** of what's been reported downtown — the type, priority, status and an approximate spot of community reports, never details or people — and **[`/join`](https://www.901safety.com/join)**, where a business or officer joins with an access code (or asks to join while sign-up is invite-only). |
 
 The app is fully responsive (phone bottom-tab layout with a centre **Report** button; desktop
@@ -116,7 +116,9 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   (access codes and their seats, invite-only sign-up, requests to join, the audit log, app
   settings, and `public_incidents()` — the sanitized feed behind `/live`), then
   [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql) (the wall displays'
-  private links: a hash of each key, server-only).
+  private links: a hash of each key, server-only), then
+  [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql) (Invite a list: the
+  paced invitation queue, its settings row and `claim_queued_invites()`, server-only).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -138,8 +140,9 @@ writing reports in the original format, so deploying the new UI before migrating
    [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql), then
    [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql), then
    [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql), then
-   [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql)
-   into the SQL editor. `0002`–`0005` are idempotent and keep existing data.
+   [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql), then
+   [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql)
+   into the SQL editor. `0002`–`0006` are idempotent and keep existing data.
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 5. **Auth → Hooks → Before User Created** → Postgres function
@@ -191,6 +194,7 @@ are **server-only** Vercel variables.
 | `EMAIL_REPLY_TO` | server | optional: where replies to any email go (the sending domain has no inbox, so without it a reply bounces). Leave it empty when the reply relay is on. |
 | `RESEND_WEBHOOK_SECRET`, `INBOUND_FORWARD_TO` | server | the reply relay: the Resend webhook's signing secret, and the hidden inbox replies are forwarded to (comma-separated) |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
+| `CRON_SECRET` | server | Vercel Cron's bearer secret for `/api/cron/invites` (Invite a list). **Production only.** Unset = the endpoint answers 503 and no queued invitation goes out. |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 
 ---
@@ -222,6 +226,10 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
    image optimization and caching headers.
 
 > This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
+
+`vercel.json` also schedules one cron job — `/api/cron/invites` every 15 minutes, for
+[Inviting a list](#inviting-a-list-paced). Vercel runs crons on the production deployment only, and
+it needs `CRON_SECRET` set there.
 
 ---
 
@@ -333,6 +341,53 @@ looks up the invited role).
 - **Preview:** `npx tsx scripts/email-previews.ts [dir]` writes every variant as HTML + text
   (default `/tmp/dmc-invite-emails/html`, with an `index.html`) — nothing is sent.
 
+## Inviting a list (paced)
+
+Admin → Team → **Invite a list** invites a whole list — say, the ~90 businesses on a safety
+meeting's sign-in sheet — a few at a time: **5 every 15 minutes**. The emails trickle out (better
+for deliverability than 90 at once), and the team can watch, pause, or cancel the rest.
+
+> **Before first use:** (1) apply [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql)
+> to the production database, (2) set **`CRON_SECRET`** in Vercel → Production (for example
+> `openssl rand -hex 32`), (3) deploy (`vercel --prod`). Vercel registers the cron from `vercel.json`
+> on that deploy (Project → Settings → Cron Jobs). Without the migration the card says so and nothing
+> is queued; without `CRON_SECRET` the cron answers 503 and nothing goes out.
+
+- **Paste:** one address per line. `dana@business.com`, `Dana Whitfield <dana@business.com>`,
+  `"Whitfield, Dana" <dana@business.com>`, spreadsheet columns and stray commas or semicolons all
+  work. Addresses are trimmed, lower-cased and de-duplicated; lines that aren't an address are
+  listed with their line number. Up to 500 addresses at a time. Pick the role (**Member business**
+  by default, with the same hints as Invite someone) and an optional label ("Safety Meeting · Mar
+  11"). Addresses already waiting in the queue are skipped.
+- **Confirm:** "92 invitations will go out 5 every 15 minutes, starting about 2:45 PM. You can pause
+  any time." — with when the last should go out and how many are already waiting ahead of them.
+- **Sending:** the cron (`/api/cron/invites`) claims the oldest few and invites each exactly as
+  Invite someone does (`api/_lib/invite.ts`, shared by both): the email written for the role, from
+  the administrator who queued it (their name in the email), never lowering anyone, an audit entry
+  (`invite.sent` with `via: "queue"`). About 600 ms apart, so the email service sees at most ~2 a
+  second. People who already use the dashboard (they've signed in) are **skipped** — "Already a
+  member" — so the list can't change an active member's role (use Invite someone for that). Someone
+  invited before who never signed in gets the invitation again. If whoever queued a row is no
+  longer an administrator, it isn't sent.
+- **Watching:** counts (queued · sent · skipped · failed · cancelled), "Next 5 at HH:MM", the next
+  batch (each can be cancelled), and recent results with a status and a readable outcome. The card
+  reloads about 30 seconds after each run while invitations are waiting.
+- **Pause / Resume / Cancel the rest:** Pause stops the next run (a batch already being sent
+  finishes). Cancel the rest cancels every invitation still waiting; ones already sent stay sent.
+- **When something goes wrong:** one failure never stops the others — the row is marked failed with
+  why ("Couldn't send: …"). A rate limit puts the row back for the next run (failed after 3 tries).
+  A row stuck in "sending" for 30 minutes (its run died) goes back in the queue, and is failed after
+  3 tries. A run starts no new send after 20 seconds, well inside Vercel's 30-second limit. Failed
+  and cancelled addresses can be pasted again.
+- **The pace** lives in the one-row `invite_queue_settings` table: `per_run` (1–10, default 5) and
+  `paused`. To send 10 per run: `update public.invite_queue_settings set per_run = 10;`
+- **API** (`/api/admin/invite-queue`, administrators only, every change audited): `add`, `list`,
+  `pause`, `resume`, `cancel` (one `id`, a `label`, or `all: true`). The queue tables have RLS on with
+  no policies: only the server reads or writes them, and only the service role may run
+  `claim_queued_invites()` — which hands each row to exactly one run (`FOR UPDATE SKIP LOCKED`).
+- **Demo mode:** the card shows a sample 92-address list mid-way through, and every action is
+  simulated.
+
 ---
 
 ## Project structure
@@ -340,7 +395,8 @@ looks up the invited role).
 ```
 api/
   _lib/              auth, Supabase admin, http, OpenAI + ElevenLabs clients, incident vocabulary,
-                     invitation emails (invitations.ts) and the film list (films.ts)
+                     invitation emails (invitations.ts), the film list (films.ts), one invitation
+                     (invite.ts) and the paced queue (inviteQueue.ts, emailList.ts)
   voice-session.ts   voice line: ElevenLabs agent token + caller context (GPT-Live fallback)
   live-session.ts    GPT-Live interviewer — the fallback line
   tts.ts             ElevenLabs Eleven v4 speech + voice list
@@ -350,6 +406,8 @@ api/
   auth/ officers/ passkeys/   email hook, invitations (any role), WebAuthn
   join.ts            public: redeem an access code, ask to join
   admin/members.ts   admin: approve requests, a member's passkeys, setup links
+  admin/invite-queue.ts  admin: Invite a list — add, list, pause, resume, cancel
+  cron/invites.ts    Vercel Cron, every 15 minutes: sends the next few queued invitations
 src/
   pages/             Landing, Login, Join, LiveMap, BusinessHome, ReportCenter, OpsCenter,
                      BoloBoard, Insights, AdminPortal, AccountPage
@@ -359,7 +417,8 @@ src/
   lib/               taxonomy, live (GPT-Live client), speech (ElevenLabs + fallback),
                      announce (spoken copy), schema detection, media, geo, format
   data/demo.ts       demo-mode dataset
-scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership endpoints + every invitation email
+scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership endpoints, every invitation email,
+                         and Invite a list with its cron
 scripts/email-previews.ts  every invitation email as HTML + text, to look at without sending
 scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
@@ -382,6 +441,10 @@ supabase/migrations/     schema + RLS
   account — or an open invitation — is raised to the invited role or keeps its own (removing
   officer access is a separate, confirmed action in Team). A failed lookup or write stops before
   any email is sent.
+- Invite a list queues invitations server-side only (no browser access to the queue). The cron
+  that sends them needs Vercel's `CRON_SECRET` (compared in constant time) and fails closed — 503 —
+  without it; each row is sent only while whoever queued it is still an administrator, and people
+  who already use the dashboard are skipped.
 - The public map (`/live`) reads only `public_incidents()`: community reports, type, priority,
   status and a position rounded to about 100 m — no text, people, vehicles, photos, reporter or
   address. Officers-only and dismissed reports never appear; admins can pause it or delay it.

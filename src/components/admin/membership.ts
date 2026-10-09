@@ -113,6 +113,10 @@ const ACTION_TEXT: Record<string, string> = {
   'passkey.removed': 'removed a passkey of',
   'passkey.setup_link': 'sent a passkey setup link to',
   'settings.changed': 'changed site settings',
+  'queue.added': 'queued invitations',
+  'queue.paused': 'paused the invitation queue',
+  'queue.resumed': 'resumed the invitation queue',
+  'queue.cancelled': 'cancelled queued invitations',
 };
 
 const SETTING_TEXT: Record<string, string> = {
@@ -139,7 +143,23 @@ export function describeAudit(e: AuditEntry): { verb: string; target: string | n
       break;
     case 'invite.sent':
     case 'waitlist.approved':
-      detail = typeof m.role === 'string' ? `as ${m.role}` : null;
+      detail = [typeof m.role === 'string' && `as ${m.role}`, m.via === 'queue' && 'from a list'].filter(Boolean).join(' · ');
+      break;
+    case 'queue.added':
+      detail = [
+        typeof m.added === 'number' && plural(m.added, 'address', 'addresses'),
+        typeof m.role === 'string' && `as ${m.role}`,
+        typeof m.skipped === 'number' && m.skipped > 0 && `${m.skipped} already waiting`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      break;
+    case 'queue.paused':
+    case 'queue.resumed':
+      detail = typeof m.queued === 'number' ? `${m.queued} waiting` : null;
+      break;
+    case 'queue.cancelled':
+      detail = typeof m.count === 'number' ? plural(m.count, 'invitation') : null;
       break;
     case 'passkey.removed':
       detail = typeof m.device === 'string' ? m.device : null;
@@ -207,6 +227,7 @@ export function demoWaitlist(now: number): WaitlistEntry[] {
 export function demoAudit(now: number): AuditEntry[] {
   return [
     { id: 'a1', actor: 'System', action: 'code.redeemed', target: 'K7QM-2XRT', meta: { email: 'orders@frontstreetdeli.example', outcome: 'invited', role: 'business' }, createdAt: now - 3 * 3_600_000 },
+    { id: 'a1q', actor: 'Sgt. R. Delgado', action: 'queue.added', target: 'Safety Meeting · Oct 8', meta: { added: 92, role: 'business', skipped: 0 }, createdAt: now - 3 * 3_600_000 - 5 * 60_000 },
     { id: 'a2', actor: 'Sgt. R. Delgado', action: 'code.created', target: 'DTPS-9HNC', meta: { label: 'New officer — night shift', role: 'officer', seats: 1 }, createdAt: now - 4 * 3_600_000 },
     { id: 'a3', actor: 'Sgt. R. Delgado', action: 'member.role_changed', target: 't.hayes@downtownsafety.example', meta: { from: 'business', to: 'officer' }, createdAt: now - 26 * 3_600_000 },
   ];

@@ -163,6 +163,16 @@ export async function hasSignedIn(admin: SupabaseClient, userId: string): Promis
 }
 
 /**
+ * Strict: has this account ever signed in? A failed lookup throws — the paced list (Invite a list)
+ * skips people who already use the dashboard, and must never skip anyone on a guess.
+ */
+export async function signedInBefore(admin: SupabaseClient, userId: string): Promise<boolean> {
+  const { data, error } = await admin.auth.admin.getUserById(userId);
+  if (error || !data?.user) throw new Error(error?.message || 'Could not look up the account');
+  return Boolean(data.user.last_sign_in_at);
+}
+
+/**
  * The acting admin's name for "… invited you" lines, or null when they haven't
  * set one (the sign-up default is their email's local part, which reads badly).
  */
