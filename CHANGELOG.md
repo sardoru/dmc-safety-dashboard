@@ -3,6 +3,57 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.9] — 2026-10-09 — Paced invitations: brakes and no repeats
+
+> **Before deploying:** apply `supabase/migrations/0008_invite_queue_brakes.sql` (it only adds
+> columns; the previous app keeps working). Check that `CRON_SECRET` in Vercel → Production has at
+> least 16 characters — a shorter one now stops the cron (503).
+
+### Fixed
+- **Pause and Cancel stop what hasn't started — mid-run too.** A run now claims one row at a time
+  (`claim_queued_invites(1)`, up to the per-run count) and re-reads the pause switch before each
+  claim. Right before an email goes out it re-checks, in one statement, that the row is still being
+  sent and not cancelled, and stamps the new `emailing_at`. Cancel also takes rows a run has claimed
+  whose email hasn't started; a pause puts such a row back in the queue. A rate limit on a row that
+  was cancelled meanwhile leaves it cancelled. Only an email already on its way finishes — the card
+  now says exactly that.
+- **Re-pasting never re-invites.** `add` skips anyone already invited — a list invitation that went
+  out, an open invitation, or an existing account — and reports them ("already invited") in the
+  result and the card. **Invite again people who were already invited** (`reinvite: true`) sends a
+  second invitation on purpose.
+- **No double send after a stuck run.** Recovery puts a stuck row back in the queue only if its
+  email never started; one stuck after `emailing_at` is marked failed — "May have gone out — check
+  before inviting again" — and never sent again. Each queued email carries the row id as Resend's
+  idempotency key (Invite someone's emails are unchanged). No answer at all from the email service
+  counts as "may have gone out".
+- **One run per quarter hour.** A check-and-set on `invite_queue_settings.last_slot` makes a
+  duplicate delivery of the cron do nothing, so it can't double the pace.
+- **The confirm step's "starting about HH:MM" is never in the past**, and it's fresh: the card
+  checks the list with the server (`dryRun`) when you review it, so the counts are exact.
+- A rate limit now ends the run (the row waits for the next one) instead of being retried at once.
+
+### Changed
+- **Lists are for member businesses only.** The role picker is gone; the server refuses officer and
+  administrator lists — invite those one at a time with Invite someone. A non-business row queued
+  earlier is cancelled, not sent.
+- **The email limit pauses the queue.** When the email service reports its daily or monthly sending
+  limit, the queue pauses itself (`pause_reason`, `queue.paused` by System in Activity), the row
+  goes back unsent, and the card says "Paused: the daily email limit was reached". Resume clears it.
+- **Last run.** Each run records `last_run_at` and what it did; the card shows "Last run HH:MM" and
+  warns when invitations are waiting but nothing has run for over 20 minutes.
+- `CRON_SECRET` must be at least 16 characters (shorter: logged, 503).
+
+### Verified
+- API harness 307/307 (279 before; the queue's checks updated for one-row claims and business-only
+  lists, plus new ones for each fix: pause and cancel mid-run, the check right before the email, a
+  rate limit on a cancelled row, the daily and monthly limit, re-pasting and Invite again, the dry
+  run, stuck rows after `emailing_at`, no answer from the email service, duplicate deliveries,
+  the idempotency key, the last run, a short `CRON_SECRET`, and a start time never in the past).
+- `supabase/tests/0008_invite_queue_brakes.test.sql`: 15 checks on plain Postgres — the slot
+  check-and-set, the one-row claim, the stamp right before the email, cancel of claimed rows,
+  recovery, grants, and 0006 + 0008 applied again.
+- The API and the cron also ran end to end against PostgREST 16 on Postgres 17 with 0001–0008.
+
 ## [0.4.8] — 2026-10-09 — Private report fields stay private
 
 ### Security
