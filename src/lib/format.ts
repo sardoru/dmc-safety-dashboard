@@ -1,4 +1,4 @@
-import { format, formatDistanceToNowStrict, isToday, isYesterday } from 'date-fns';
+import { format, formatDistanceStrict, formatDistanceToNowStrict, isToday, isYesterday } from 'date-fns';
 
 /** Join class names, skipping falsy values. */
 export function cn(...parts: (string | false | null | undefined)[]): string {
@@ -27,6 +27,11 @@ export function timeAgo(ts: number, now = Date.now()): string {
   if (diff < 60 * 60_000) return `${Math.max(1, Math.round(diff / 60_000))}m ago`;
   if (diff < 24 * 60 * 60_000) return `${Math.round(diff / 3_600_000)}h ago`;
   return formatDistanceToNowStrict(ts, { addSuffix: true });
+}
+
+/** Either side of now: "in 29 days", "3 hours ago" (timeAgo reads the future as "just now"). */
+export function relativeTime(ts: number, now = Date.now()): string {
+  return formatDistanceStrict(ts, now, { addSuffix: true });
 }
 
 export function clockTime(ts: number): string {

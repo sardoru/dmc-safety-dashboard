@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 import { deletePasskey, listPasskeys, passkeysSupported, registerPasskey } from '../lib/passkeys';
 import type { PasskeyInfo } from '../types';
 import { timeAgo } from '../lib/format';
@@ -7,8 +8,21 @@ import { useNow } from '../hooks/useNow';
 import { Button, IconButton } from './ui/Button';
 import { Banner } from './ui/Feedback';
 
-export default function PasskeyManager() {
+/**
+ * Your passkeys. `setup` (from an administrator's setup link) shows a one-tap
+ * prompt — WebAuthn needs a tap, so it can't start on its own.
+ */
+export default function PasskeyManager({
+  setup = false,
+  account,
+  onSetupDone,
+}: {
+  setup?: boolean;
+  account?: string | null;
+  onSetupDone?: () => void;
+} = {}) {
   const now = useNow();
+  const { push } = useToast();
   const [items, setItems] = useState<PasskeyInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -48,6 +62,10 @@ export default function PasskeyManager() {
     try {
       await registerPasskey();
       await refresh();
+      if (setup) {
+        push({ title: 'Passkey added', body: 'Next time, sign in with Face ID, Touch ID or your device PIN.', tone: 'success' });
+        onSetupDone?.();
+      }
     } catch (err) {
       setError(err instanceof Error && err.message ? `Could not add passkey: ${err.message}` : 'Passkey setup was cancelled.');
     } finally {
@@ -74,12 +92,38 @@ export default function PasskeyManager() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] leading-snug text-muted">Sign in instantly with Face ID, Touch ID or your device PIN.</p>
-        <Button size="sm" loading={busy} icon={<Plus className="h-4 w-4" />} onClick={() => void add()}>
-          Add passkey
-        </Button>
-      </div>
+      {setup ? (
+        <div className="rounded-2xl border border-accent/40 bg-accent-soft p-4">
+          <p className="text-sm font-semibold text-ink">Add a passkey on this device</p>
+          <p className="mt-1 text-[13px] leading-snug text-ink-2">
+            Sign in next time with Face ID, Touch ID or your device PIN
+            {account ? (
+              <>
+                {' '}
+                as <span className="font-semibold text-ink wrap-anywhere">{account}</span>
+              </>
+            ) : null}
+            . One tap — no password.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button loading={busy} icon={<KeyRound className="h-4 w-4" />} onClick={() => void add()}>
+              Add a passkey
+            </Button>
+            {onSetupDone && (
+              <Button variant="ghost" onClick={onSetupDone} disabled={busy}>
+                Not now
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[13px] leading-snug text-muted">Sign in instantly with Face ID, Touch ID or your device PIN.</p>
+          <Button size="sm" loading={busy} icon={<Plus className="h-4 w-4" />} onClick={() => void add()}>
+            Add passkey
+          </Button>
+        </div>
+      )}
 
       {error && <Banner tone="danger">{error}</Banner>}
 

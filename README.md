@@ -16,7 +16,8 @@ publish be-on-the-lookout notices, and **hear new reports read aloud**.
 | --- | --- |
 | **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: **Report by voice** (an automated two-way interview — they just talk), a **guided form** that can read its questions aloud and organise dictated notes ("Organize my notes"), or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a spoken read-back confirmation. |
 | **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and a spoken **shift briefing** summarised from the last hours. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
-| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (officer invites, team, businesses, system status). |
+| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (officer invites, team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
+| **The public** | A **live map at [`/live`](https://www.901safety.com/live)** of what's been reported downtown — the type, priority, status and an approximate spot of community reports, never details or people — and **[`/join`](https://www.901safety.com/join)**, where a business or officer joins with an access code (or asks to join while sign-up is invite-only). |
 
 The app is fully responsive (phone bottom-tab layout with a centre **Report** button; desktop
 sidebar), has light and dark themes, and keeps a **"Call 9-1-1 first"** callout everywhere a
@@ -95,7 +96,8 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
 ```
 
 - **Frontend:** React Router app with role-based workspaces (`/home`, `/ops`, `/report`,
-  `/bolo`, `/insights`, `/admin`, `/account`), Leaflet maps (CARTO tiles), a small design
+  `/bolo`, `/insights`, `/admin`, `/account`) and public pages (`/welcome`, `/login`, `/join`,
+  `/live`, `/how-it-works`), Leaflet maps (CARTO tiles), a small design
   system in [`src/components/ui`](./src/components/ui), and contexts for auth, incidents,
   BOLOs, voice, theme and toasts.
 - **Backend:** stateless functions under [`/api`](./api). They hold every secret — the browser
@@ -108,7 +110,10 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   the `report_updates` timeline, `bolos` with sightings, the private `report-media` photo
   bucket, and the RLS that goes with them), then [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql)
   (who may write what: the database stamps who filed a report, keeps the officer workflow
-  officer-only, and lets members edit only their display name).
+  officer-only, and lets members edit only their display name), then
+  [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql)
+  (access codes and their seats, invite-only sign-up, requests to join, the audit log, app
+  settings, and `public_incidents()` — the sanitized feed behind `/live`).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -128,10 +133,15 @@ writing reports in the original format, so deploying the new UI before migrating
 2. Apply the migrations in order — `supabase db push` with the CLI linked, **or** paste
    [`0001_init.sql`](./supabase/migrations/0001_init.sql), then
    [`0002_incidents_bolos.sql`](./supabase/migrations/0002_incidents_bolos.sql), then
-   [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql) into the SQL
-   editor. `0002` and `0003` are idempotent and keep existing data.
+   [`0003_write_guards.sql`](./supabase/migrations/0003_write_guards.sql), then
+   [`0004_membership_and_public_map.sql`](./supabase/migrations/0004_membership_and_public_map.sql)
+   into the SQL editor. `0002`–`0004` are idempotent and keep existing data.
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
+5. **Auth → Hooks → Before User Created** → Postgres function
+   `public.hook_before_user_created`. It lets everyone sign up while Admin → Access → *Who can
+   join* is open, and only invited addresses (an invitation, an access code or an approved
+   request) once it's invite-only. Without the hook, invite-only has no effect.
 
 ### 2. Branded magic-link emails (Resend + Send Email hook)
 1. Get a [Resend](https://resend.com) API key and verify your sending domain.
@@ -236,9 +246,11 @@ api/
   reports/extract.ts text → structured report draft
   transcribe.ts      dictation
   auth/ officers/ passkeys/   email hook, officer invites, WebAuthn
+  join.ts            public: redeem an access code, ask to join
+  admin/members.ts   admin: approve requests, a member's passkeys, setup links
 src/
-  pages/             Landing, Login, BusinessHome, ReportCenter, OpsCenter, BoloBoard,
-                     Insights, AdminPortal, AccountPage
+  pages/             Landing, Login, Join, LiveMap, BusinessHome, ReportCenter, OpsCenter,
+                     BoloBoard, Insights, AdminPortal, AccountPage
   components/        ui/ (design system), layout/, report/, incidents/, map/, voice/,
                      bolo/, insights/, admin/, account/, brand/
   context/           Auth, Incidents, BOLOs, Voice, Profile, Theme, Toasts, Radio
@@ -260,6 +272,13 @@ supabase/migrations/     schema + RLS
 - Text-to-speech, briefing and extraction endpoints require a signed-in user with the right
   role; speech is rate-limited per user.
 - Magic links are single-use; passkey challenges are one-time and verified server-side.
+- Access codes are meant to be shared, so redeeming one never signs anyone in — it claims a
+  seat and emails a link to the address, which proves it. A leaked code can only burn seats
+  (revoke it); it can't raise anyone's role beyond the code's, or lower one.
+- The public map (`/live`) reads only `public_incidents()`: community reports, type, priority,
+  status and a position rounded to about 100 m — no text, people, vehicles, photos, reporter or
+  address. Officers-only and dismissed reports never appear; admins can pause it or delay it.
+- Administrative changes are written to an append-only audit log only admins can read.
 
 ## Changelog
 See [CHANGELOG.md](./CHANGELOG.md).
