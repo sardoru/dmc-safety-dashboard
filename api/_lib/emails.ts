@@ -133,19 +133,39 @@ function getResend(): Resend {
   return resend;
 }
 
-export async function sendEmail(to: string, email: BrandedEmail): Promise<void> {
+export interface SendOptions {
+  /** Sent as Resend's Idempotency-Key: the same key within 24 hours is delivered once. */
+  idempotencyKey?: string;
+}
+
+/** A refused send: the service's message, plus its error name and HTTP status when it gave them. */
+export interface EmailError extends Error {
+  code?: string;
+  status?: number | null;
+}
+
+export async function sendEmail(to: string, email: BrandedEmail, opts?: SendOptions): Promise<void> {
   const from = process.env.EMAIL_FROM || 'Core Downtown Memphis Safety <onboarding@resend.dev>';
   // The sending domain has no inbox: replies go to a monitored address when one is set.
   const replyTo = process.env.EMAIL_REPLY_TO?.trim();
-  const { error } = await getResend().emails.send({
-    from,
-    to,
-    subject: email.subject,
-    html: email.html,
-    text: email.text,
-    ...(replyTo ? { replyTo } : {}),
-  });
-  if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Email send failed');
+  const { error } = await getResend().emails.send(
+    {
+      from,
+      to,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      ...(replyTo ? { replyTo } : {}),
+    },
+    opts?.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+  );
+  if (error) {
+    if (typeof error === 'string') throw new Error(error);
+    const err: EmailError = new Error(error.message || 'Email send failed');
+    err.code = error.name;
+    err.status = error.statusCode;
+    throw err;
+  }
 }
 
 export function escapeHtml(s: string): string {
