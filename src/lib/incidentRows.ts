@@ -126,6 +126,112 @@ export function rowToIncident(r: ReportRow): Incident {
   };
 }
 
+// ── Other members' reports ───────────────────────────────────────────────────
+
+/**
+ * A `community_reports` row (migration 0007): someone else's community report as member businesses get it. The
+ * reporter, contact details, transcript, photos and internal fields are not in the table, so they can't reach a
+ * member's browser; `business_name` is set only for a storefront.
+ */
+export interface CommunityReportRow {
+  id: string;
+  created_at: string;
+  updated_at: string | null;
+  occurred_at: string | null;
+  source: 'officer' | 'business';
+  kind: string;
+  incident_type: string;
+  priority: number | null;
+  status: string;
+  title: string | null;
+  description: string | null;
+  address: string | null;
+  location_note: string | null;
+  lat: number;
+  lng: number;
+  happening_now: boolean | null;
+  weapons_seen: boolean | null;
+  injuries: boolean | null;
+  visibility: string | null;
+  subjects: unknown;
+  vehicles: unknown;
+  business_name: string | null;
+  assigned_name: string | null;
+  photo_count: number | null;
+  seen_count: number | null;
+}
+
+/** What members read from `community_reports`, in table order (the API harness checks it against migration 0007). */
+export const COMMUNITY_REPORT_COLUMNS = [
+  'id',
+  'created_at',
+  'updated_at',
+  'occurred_at',
+  'source',
+  'kind',
+  'incident_type',
+  'priority',
+  'status',
+  'title',
+  'description',
+  'address',
+  'location_note',
+  'lat',
+  'lng',
+  'happening_now',
+  'weapons_seen',
+  'injuries',
+  'visibility',
+  'subjects',
+  'vehicles',
+  'business_name',
+  'assigned_name',
+  'photo_count',
+  'seen_count',
+] as const satisfies readonly (keyof CommunityReportRow)[];
+
+/**
+ * A community copy as an incident (`limited`). `seenBy` holds `viewerId` when the viewer marked it as seen —
+ * never anyone else; `seenCount` and `photoCount` carry the totals.
+ */
+export function communityRowToIncident(r: CommunityReportRow, seenByViewer: string | null): Incident {
+  const inc = rowToIncident({
+    id: r.id,
+    reporter_id: null,
+    source: r.source === 'officer' ? 'officer' : 'business',
+    kind: r.kind,
+    incident_type: r.incident_type,
+    description: r.description ?? '',
+    transcript: null,
+    business_id: null,
+    business_name: r.business_name,
+    address: r.address,
+    lat: r.lat,
+    lng: r.lng,
+    status: r.status,
+    acknowledged_by: seenByViewer ? [seenByViewer] : [],
+    created_at: r.created_at,
+    title: r.title,
+    priority: r.priority,
+    occurred_at: r.occurred_at,
+    happening_now: r.happening_now,
+    weapons_seen: r.weapons_seen,
+    injuries: r.injuries,
+    subjects: r.subjects,
+    vehicles: r.vehicles,
+    location_note: r.location_note,
+    assigned_name: r.assigned_name,
+    updated_at: r.updated_at,
+    visibility: 'community',
+  });
+  return {
+    ...inc,
+    limited: true,
+    photoCount: Math.max(0, Number(r.photo_count) || 0),
+    seenCount: Math.max(Number(r.seen_count) || 0, inc.seenBy.length),
+  };
+}
+
 // ── Writing ──────────────────────────────────────────────────────────────────
 
 export function describeSubject(s: SubjectDescription): string {
