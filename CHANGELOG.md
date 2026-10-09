@@ -3,6 +3,17 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [Unreleased] — Email from 901safety.com
+
+### Added
+- `EMAIL_REPLY_TO` (optional): every email — sign-in links, invitations — carries this reply-to
+  address, so a reply reaches a monitored inbox instead of bouncing off the sending domain, which
+  has no mailbox. Shown in Admin → System.
+
+### Changed
+- `.env.example` and the README name the production sender `safety@901safety.com` (the domain
+  must be verified in Resend first).
+
 ## [0.4.5] — 2026-10-09 — Role-specific invitation emails
 
 ### Added

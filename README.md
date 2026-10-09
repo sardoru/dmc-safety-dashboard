@@ -187,7 +187,8 @@ are **server-only** Vercel variables.
 | `ELEVENLABS_AGENT_ID` | server | the voice interviewer agent (from `scripts/voice-agent.ts`); unset = GPT-Live fallback |
 | `ELEVENLABS_AGENT_TTS_MODEL`, `ELEVENLABS_AGENT_LLM` | script | agent voice model and brain: defaults `eleven_v4`, `gpt-5.6-terra` |
 | `ELEVENLABS_MODEL`, `ELEVENLABS_FALLBACK_MODEL`, `ELEVENLABS_VOICE_ID` | server | defaults `eleven_v4`, `eleven_multilingual_v2`, George |
-| `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails |
+| `RESEND_API_KEY`, `EMAIL_FROM` | server | branded emails. `EMAIL_FROM` must be on a domain verified in Resend (production: `Core Downtown Memphis Safety <safety@901safety.com>`). |
+| `EMAIL_REPLY_TO` | server | optional: where replies to any email go (the sending domain has no inbox, so without it a reply bounces) |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 

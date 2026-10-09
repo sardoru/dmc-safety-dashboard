@@ -418,6 +418,17 @@ async function main() {
   const fresh = nowSec();
   r = await runHook({ 'webhook-id': 'msg_3', 'webhook-timestamp': String(fresh), 'webhook-signature': sign('msg_3', fresh) });
   check('fresh valid signature → 200, one email sent', r.statusCode === 200 && calls.filter((c) => c.url.startsWith('https://api.resend.com/')).length === 1, { s: r.statusCode, d: r.data });
+  const resendBody = () => (calls.find((c) => c.url.startsWith('https://api.resend.com/'))?.body ?? {}) as { from?: string; reply_to?: string | string[] };
+  check('no EMAIL_REPLY_TO → no reply-to header', resendBody().reply_to === undefined, resendBody());
+  process.env.EMAIL_FROM = 'Core Downtown Memphis Safety <safety@901safety.com>';
+  process.env.EMAIL_REPLY_TO = ' help@downtown.test ';
+  calls.length = 0;
+  const fresh2 = nowSec();
+  r = await runHook({ 'webhook-id': 'msg_4', 'webhook-timestamp': String(fresh2), 'webhook-signature': sign('msg_4', fresh2) });
+  const withReply = resendBody();
+  check('EMAIL_FROM is the sender and EMAIL_REPLY_TO the reply-to', withReply.from === 'Core Downtown Memphis Safety <safety@901safety.com>' && [withReply.reply_to].flat().includes('help@downtown.test'), withReply);
+  delete process.env.EMAIL_FROM;
+  delete process.env.EMAIL_REPLY_TO;
   delete process.env.RESEND_API_KEY;
   delete process.env.SEND_EMAIL_HOOK_SECRET;
 

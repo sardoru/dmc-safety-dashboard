@@ -140,6 +140,7 @@ export const ENV_EMAIL: EnvVar[] = [
   { name: 'RESEND_API_KEY', where: 'server' },
   { name: 'SEND_EMAIL_HOOK_SECRET', where: 'server', note: 'v1,whsec_…' },
   { name: 'EMAIL_FROM', where: 'server', optional: true, note: 'verified sender' },
+  { name: 'EMAIL_REPLY_TO', where: 'server', optional: true, note: 'where replies go' },
 ];
 
 export const ENV_SCANNER: EnvVar[] = [{ name: 'VITE_RADIO_WS_URL', where: 'client', note: 'bridge WebSocket URL' }];
