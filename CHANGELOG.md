@@ -3,6 +3,71 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.7] — 2026-10-09 — Private report fields stay private
+
+### Security
+- **Other members' private report fields no longer reach a business's browser.** Every signed-in
+  member could read every community report in full — the reporter's contact phone, the voice
+  interview transcript, the reporter's account id, photo paths and internal fields — over the REST
+  API and Realtime. The app showed only a summary, but the rest was in the payload. Now
+  `reports` is readable only by the reporter (their own reports, every field) and by officers and
+  admins (every report).
+- **Member businesses read other members' reports from `community_reports`** (migration
+  `0007_community_report_privacy.sql`): a copy of each community report with only what the
+  business screens show — headline, category, priority, status, address and exact spot, when it
+  was reported and happened, the happening-now / weapon / injuries flags, the description, the
+  people and vehicles to look out for (description fields only), the storefront that filed it
+  (never a person's name), the officer working it, and how many photos it has and how many
+  businesses marked it as seen. Never the reporter's account, contact phone or email, transcript,
+  photos, internal notes, assignment id, summary, lookout link or who marked it as seen.
+- **A member reads only their own storefront.** The business directory — contact names, phones,
+  emails — is for officers and admins (the Ops Center map, Admin). Members' screens never used it.
+
+### Added
+- `community_reports`, kept in step by triggers on `reports`: new community reports, every
+  change members can see, a report shared or un-shared with the community (copy added or
+  removed), and deletes. A copy is rewritten only when something members see changed, so edits
+  to private fields send nothing. Backfilled; signed-in members may only read it; in the Realtime
+  publication.
+- `my_seen_report_ids()`: which community alerts the caller marked as seen ("Marked as seen" and
+  "N nearby businesses have seen this" work as before).
+- Admin → System: a **Private report fields** check and a "Run migration 0007" notice until it's
+  applied.
+- `supabase/tests/0007_community_report_privacy.test.sql`: 45 checks on plain Postgres (who reads
+  what, the triggers, a re-run of 0007).
+
+### Changed
+- Member businesses' dashboards load their own reports from `reports` and everyone else's from
+  `community_reports`, both live through Realtime on one channel (a member's own new report is
+  never announced to them as a nearby alert). Nearby alerts, Your block, spoken nearby alerts,
+  the home page and the Lookout board work as before. Officers and admins are unchanged; demo
+  mode is unchanged.
+- Nearby cards and the report sheet take the photo and "seen" counts from the copy; the sheet
+  says "Photos are only visible to officers and the reporter", as before.
+- A member without a storefront shows as "Downtown business" on other members' screens (it
+  showed their display name or the start of their email).
+
+### Deploy
+- **Order: deploy the app first, then run `supabase/migrations/0007_community_report_privacy.sql`
+  in the Supabase SQL editor.** The new app works on either side of the migration: until 0007
+  runs, members read `reports` as before; open dashboards look for 0007 every two minutes (and
+  when the tab comes back) and switch over by themselves. Running 0007 before the deploy would
+  leave the old app showing members no nearby alerts until the deploy.
+- Safe to run more than once. Tabs still running the previous version keep their list but stop
+  receiving other members' new alerts until reloaded.
+
+### Verified
+- SQL test 45/45 on PostgreSQL 17 with a Supabase stand-in, and three deliberately broken
+  versions of 0007 each caught.
+- API harness 214/214 (19 new: the dashboard reads exactly the columns 0007 creates and none is
+  private; the copy mapping; the member list rules; `/api/display` never selects private
+  columns).
+- The real app against the scratch database through PostgREST: a member's browser received no
+  one else's phone, transcript, photo path, summary, account id or email in any response; nearby
+  alerts, the sheet and "Mark as seen" worked; an officer still received everything. With the app
+  deployed before 0007, an open member dashboard switched over by itself when 0007 was applied.
+  Demo mode unchanged.
+
 ## [0.4.6] — 2026-10-09 — Email from 901safety.com, replies relayed
 
 ### Added
