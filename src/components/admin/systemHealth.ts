@@ -141,6 +141,8 @@ export const ENV_EMAIL: EnvVar[] = [
   { name: 'SEND_EMAIL_HOOK_SECRET', where: 'server', note: 'v1,whsec_…' },
   { name: 'EMAIL_FROM', where: 'server', optional: true, note: 'verified sender' },
   { name: 'EMAIL_REPLY_TO', where: 'server', optional: true, note: 'where replies go' },
+  { name: 'RESEND_WEBHOOK_SECRET', where: 'server', optional: true, note: 'reply relay webhook' },
+  { name: 'INBOUND_FORWARD_TO', where: 'server', optional: true, note: 'reply relay inbox (hidden)' },
 ];
 
 export const ENV_SCANNER: EnvVar[] = [{ name: 'VITE_RADIO_WS_URL', where: 'client', note: 'bridge WebSocket URL' }];

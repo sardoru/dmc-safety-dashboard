@@ -3,16 +3,15 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
-## [Unreleased] — Email from 901safety.com
+## [0.4.6] — 2026-10-09 — Email from 901safety.com, replies relayed
 
 ### Added
-- `EMAIL_REPLY_TO` (optional): every email — sign-in links, invitations — carries this reply-to
-  address, so a reply reaches a monitored inbox instead of bouncing off the sending domain, which
-  has no mailbox. Shown in Admin → System.
-
-### Changed
-- `.env.example` and the README name the production sender `safety@901safety.com` (the domain
-  must be verified in Resend first).
+- **Every email now comes from `safety@901safety.com`** (the domain is verified in Resend).
+- **A hidden reply relay** (`/api/inbound-email`): a reply to any email reaches the team's inbox
+  (`INBOUND_FORWARD_TO`), and the team's answer goes back from `safety@901safety.com` — their own
+  address never shows, even in quoted text. Signed webhooks only; loops and automatic replies are
+  dropped; failed sends are retried by Resend. 15 harness checks (195 total).
+- `EMAIL_REPLY_TO` (optional, from #12) for a plain reply-to when the relay is off.
 
 ## [0.4.5] — 2026-10-09 — Role-specific invitation emails
 
