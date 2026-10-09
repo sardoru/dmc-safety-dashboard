@@ -269,3 +269,6 @@ drop policy if exists businesses_select on public.businesses;
 create policy businesses_select on public.businesses
   for select to authenticated
   using (owner_id = auth.uid() or public.is_officer());
+
+-- Let the REST API see community_reports and my_seen_report_ids() right away.
+notify pgrst, 'reload schema';
