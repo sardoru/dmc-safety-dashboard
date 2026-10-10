@@ -3,6 +3,37 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.11] — 2026-10-10 — The film in the hero; merging deploys
+
+> No migration. **From this release, merging to `main` deploys production.** The Vercel project is
+> now connected to this GitHub repo. A pull request that needs a database migration: apply the
+> migration *before* merging, because the merge is the deploy.
+
+### Added
+- **The 30-second film in the landing page hero, on the right.** The hero's empty right half now
+  plays it (`src/film/HeroFilm.tsx`).
+  - On a wide screen it starts at once, muted and on a loop, with the captions on. It does not
+    start by itself with reduced motion or a data saver set.
+  - "Watch with sound" plays it from the start, with sound and the browser's controls.
+  - A pause button stops the loop, and the loop pauses while the hero is off screen.
+  - On a phone it sits below the hero text, behind its poster with a play button.
+  - The poster goes through the image service, with the file itself as the fallback. The captions
+    use the site's type.
+  - Beside the film the headline steps down (42 px at `lg`, 50 px at `xl`), so "Downtown
+    Memphis," keeps one line.
+  - The hero's "Watch in 30 seconds" text link gives way to the film. The footer keeps its link.
+
+### Removed
+- **The "A self-regulated safety dashboard" pill above the hero headline.** The phrase stays on
+  the join page, the live map and the how-it-works page.
+
+### Changed
+- **Deploys.** The Vercel project is connected to `sardoru/dmc-safety-dashboard` (production
+  branch `main`, custom domains assigned automatically).
+  - Merging a pull request deploys production.
+  - Every other branch gets a preview deployment, behind Vercel login.
+  - `vercel --prod` still works for a manual deploy.
+
 ## [0.4.10] — 2026-10-10 — The Safety Dashboard in 30 seconds
 
 > No migration. Deploy as usual (`vercel --prod` from `main`).
@@ -19,17 +50,8 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   It is in light mode, with the same narrator and the same rules as the other films: "a
   self-regulated safety dashboard", no AI wording, and the S Main St sample report. It was made in
   `~/videos/dmc-safety-in-30-seconds`.
-- **In the landing page hero, on the right.** The film fills the hero's empty right half, so it is
-  the first thing a visitor sees (`src/film/HeroFilm.tsx`).
-  - On a wide screen it starts at once, muted and on a loop, with the captions on. It does not
-    start by itself with reduced motion or a data saver set.
-  - "Watch with sound" plays it from the start, with sound and the browser's controls.
-  - A pause button stops the loop, and the loop pauses while the hero is off screen.
-  - On a phone it sits below the hero text, behind its poster with a play button.
-  - The poster goes through the image service; the captions use the site's type.
-  - Beside the film, the headline steps down (42 px at `lg`, 50 px at `xl`), so "Downtown
-    Memphis," keeps one line.
-  - The footer has "In 30 seconds · 0:30".
+- **Links to it, first in each list:** "Watch in 30 seconds · 0:30" in the landing page hero, and
+  "In 30 seconds · 0:30" in the footer.
 - **Its own page** (`in-30-seconds.html`), with chapters, a transcript, captions, VideoObject
   JSON-LD and a share card (`public/video/in-30-seconds/og-image.png`).
 - **Script support for the fourth film:** `scripts/film-data.mjs --film in-30-seconds` and
