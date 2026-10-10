@@ -206,6 +206,7 @@ are **server-only** Vercel variables.
 | `RESEND_WEBHOOK_SECRET`, `INBOUND_FORWARD_TO` | server | the reply relay: the Resend webhook's signing secret, and the hidden inbox replies are forwarded to (comma-separated) |
 | `SEND_EMAIL_HOOK_SECRET` | server | verifies the Supabase email hook |
 | `CRON_SECRET` | server | Vercel Cron's bearer secret for `/api/cron/invites` (Invite a list), at least 16 characters. **Production only.** Unset or shorter = the endpoint answers 503 and no queued invitation goes out. |
+| `MPD_LAYER` | server | `on` shows the MPD's reports from the City's open data on the maps ([MPD reports](#mpd-reports-from-the-citys-open-data)). Unset = off: `/api/mpd-incidents` answers `{ enabled: false }` and the maps show no MPD layer or toggle. Off in production until the City and MPD give permission. |
 | `RP_ID`, `RP_ORIGIN` | server | passkey relying party. Production: `RP_ID=901safety.com` (works on the bare domain and `www`) and `RP_ORIGIN=https://www.901safety.com,https://901safety.com` (comma-separated). Unset = the request host. Passkeys are bound to the domain — changing it means users add a new passkey once. |
 
 ---
@@ -283,6 +284,28 @@ domain's DNS (GoDaddy). Add a webhook for `email.received` → `https://www.901s
 and put its signing secret in `RESEND_WEBHOOK_SECRET`. Set `INBOUND_FORWARD_TO`, leave
 `EMAIL_REPLY_TO` empty, and redeploy. The Resend API key must have full access, because the relay
 reads received mail.
+
+## MPD reports from the City's open data
+
+The Memphis Police Department's own reports can show on the Operations Center map and the public
+live map as their own layer: slate diamonds, apart from the community's round pins. The source is
+the City's "MPD Public Safety Incidents" dataset on the Memphis Open Data Hub
+(`12b51ce4d5a14493ab6cc05d32e0c1ee_0`).
+
+- **What is shown.** Only reports inside the downtown core (the outline the maps draw) and from the
+  last 7 days. Each shows the UCR category and offenses, the report time (and the offense time when
+  it is more than an hour earlier), and the block or intersection. The fields are the City's, as
+  published.
+- **How it works.** `api/mpd-incidents.ts` asks the City's ArcGIS query service for that area and
+  window. `api/_lib/mpd.ts` groups the several offense lines of one report into one incident, and
+  the edge caches the answer for 30 minutes. The City updates the dataset each morning.
+- **Credit.** The City's citation is in the map's attribution line while the layer is on: "City of
+  Memphis, Open Data Program, MPD Public Safety Incidents, accessed …, data.memphistn.gov".
+  Every marker says the reports are preliminary and are not the official crime index.
+- **Off until permission.** The dataset's page says "No License Provided — Request permission to
+  use", so the owner wrote to the City's Open Data Program and to MPD on 2026-10-10. Until they
+  answer, `MPD_LAYER` stays unset in Production.
+- **To turn it on:** set `MPD_LAYER=on` for Production in Vercel, then redeploy.
 
 ## Wall display (`/tv`)
 

@@ -3,6 +3,35 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.12] — 2026-10-10 — MPD reports from the City's open data (off until permission)
+
+> No migration. The layer ships **off**: it stays dark until `MPD_LAYER=on` is set for Production
+> (and redeployed) once the City's Open Data Program and MPD answer the owner's letters.
+
+### Added
+- **The MPD's own reports, on the maps as their own layer.** The source is the City's "MPD Public
+  Safety Incidents" dataset on the Memphis Open Data Hub, limited to the downtown core and to the
+  last 7 days of reports.
+  - **Where:** the Operations Center map ("MPD reports · 7 days" in the layers menu) and the public
+    live map (a toggle at the top right).
+  - **Look:** slate diamonds, under the community's round pins.
+  - **Each marker:** the UCR category and offenses, when it was reported (and when it happened,
+    if more than an hour earlier), and the block or intersection. It also says that the reports
+    are preliminary and are not the official crime index.
+  - **Credit:** the City's citation is in the map's attribution line while the layer is on.
+- **`/api/mpd-incidents`** asks the City's ArcGIS service for the downtown core and the 7-day
+  window (`api/_lib/mpd.ts`).
+  - It groups the offense lines of one report into one incident, and gives block-level addresses
+    ("200 block of Peabody Pl").
+  - The edge caches the answer for 30 minutes, and a dropped connection gets one retry.
+  - Off unless `MPD_LAYER=on`; then the maps show no MPD layer or toggle at all.
+- **API harness:** 14 checks.
+  - It is off by default and never asks the City when off.
+  - The query (POST, UTC timestamp, the outline), grouping, order, addresses, citation and cache
+    are checked.
+  - So are paging, the retry, and a 502 after two server errors.
+  - The API's downtown outline must match the maps'.
+
 ## [0.4.11] — 2026-10-10 — The film in the hero; merging deploys
 
 > No migration. **From this release, merging to `main` deploys production.** The Vercel project is

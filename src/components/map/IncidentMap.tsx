@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import { Building2, Flame, Layers, ScanEye, Shapes } from 'lucide-react';
+import { Building2, Diamond, Flame, Layers, ScanEye, Shapes, type LucideIcon } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import type { Bolo, Business, Incident } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { useMpdIncidents } from '../../hooks/useMpdIncidents';
 import { DOWNTOWN_CENTER, DOWNTOWN_CORE, jitter } from '../../lib/geo';
 import { PRIORITIES, categoryMeta } from '../../lib/taxonomy';
 import { cn, shortAddress } from '../../lib/format';
 import { boloIcon, businessIcon, incidentIcon, tileLayerProps } from './mapIcons';
+import MpdLayer, { MpdKey } from './MpdLayer';
 
 export interface MapFocus {
   lat: number;
@@ -32,6 +34,8 @@ interface IncidentMapProps {
   /** Initial center (defaults to the downtown core). */
   center?: [number, number];
   className?: string;
+  /** Offer the MPD's reports from the City's open data as a layer (once it is turned on, see lib/mpd.ts). */
+  mpd?: boolean;
 }
 
 interface Layers {
@@ -39,6 +43,7 @@ interface Layers {
   heat: boolean;
   businesses: boolean;
   bolos: boolean;
+  mpd: boolean;
 }
 
 export function FlyTo({ focus }: { focus?: MapFocus | null }) {
@@ -74,11 +79,22 @@ export default function IncidentMap({
   zoom = 15,
   center,
   className,
+  mpd = false,
 }: IncidentMapProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const [layers, setLayers] = useState<Layers>({ district: true, heat: false, businesses: false, bolos: true, ...defaultLayers });
+  const [layers, setLayers] = useState<Layers>({ district: true, heat: false, businesses: false, bolos: true, mpd: true, ...defaultLayers });
   const [menu, setMenu] = useState(false);
+  const mpdFeed = useMpdIncidents(mpd);
+  const mpdOffered = mpd && mpdFeed.enabled;
+  const showMpd = mpdOffered && layers.mpd;
+  const options: [keyof Layers, string, LucideIcon][] = [
+    ['district', 'Downtown core outline', Shapes],
+    ['heat', 'Incident density', Flame],
+    ['bolos', 'BOLO last seen', ScanEye],
+    ['businesses', 'Member businesses', Building2],
+    ...(mpdOffered ? ([['mpd', 'MPD reports · 7 days', Diamond]] as [keyof Layers, string, LucideIcon][]) : []),
+  ];
 
   // Draw closed incidents first so open ones sit on top.
   const ordered = useMemo(
@@ -107,6 +123,8 @@ export default function IncidentMap({
             interactive={false}
           />
         )}
+
+        {showMpd && <MpdLayer feed={mpdFeed} />}
 
         {layers.heat &&
           incidents.map((i) => (
@@ -187,15 +205,8 @@ export default function IncidentMap({
             <Layers className="h-5 w-5" />
           </button>
           {menu && (
-            <div className="w-52 animate-slide-up rounded-2xl border border-line bg-surface p-2 shadow-pop">
-              {(
-                [
-                  ['district', 'Downtown core outline', Shapes],
-                  ['heat', 'Incident density', Flame],
-                  ['bolos', 'BOLO last seen', ScanEye],
-                  ['businesses', 'Member businesses', Building2],
-                ] as const
-              ).map(([key, label, Icon]) => (
+            <div className="w-56 animate-slide-up rounded-2xl border border-line bg-surface p-2 shadow-pop">
+              {options.map(([key, label, Icon]) => (
                 <label
                   key={key}
                   className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] text-ink hover:bg-surface-2"
@@ -222,6 +233,7 @@ export default function IncidentMap({
             {PRIORITIES[p].short}
           </span>
         ))}
+        {showMpd && <MpdKey days={mpdFeed.windowDays} />}
       </div>
     </div>
   );
