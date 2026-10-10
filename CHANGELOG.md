@@ -29,6 +29,21 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
 - **The live map's privacy note** says its rules are for reports filed on the dashboard, and that
   MPD reports appear as the City publishes them: to the block, and with no names.
 
+## [0.4.13] — 2026-10-10 — Invites on a phone
+
+> No migration.
+
+### Fixed
+- **Administrators can invite people from a phone.** The mobile tab bar left Administration out,
+  and so did the Settings page the avatar opens, so on a phone there was no way to reach "Invite
+  someone".
+  - The mobile tab bar now keeps **Admin** for administrators: Ops · Report · Lookout · Insights ·
+    Admin. Officers' and businesses' tabs are unchanged.
+  - On a phone, Settings opens with an **Administration** card for administrators.
+    - **Invite someone** opens `/admin#invite`, which scrolls the invite form into view.
+    - **Access codes** opens the Access tab.
+  - On a desktop, the card stays hidden; the sidebar already has Administration.
+
 ## [0.4.12] — 2026-10-10 — MPD reports from the City's open data (off until permission)
 
 > No migration. The layer ships **off**: it stays dark until `MPD_LAYER=on` is set for Production
