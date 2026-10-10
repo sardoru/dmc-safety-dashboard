@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { MapContainer, Marker, Polygon, TileLayer, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useTheme } from '../../context/ThemeContext';
-import { useMpdIncidents } from '../../hooks/useMpdIncidents';
 import { useNow } from '../../hooks/useNow';
 import type { PublicIncident } from '../../hooks/usePublicIncidents';
 import { DOWNTOWN_CENTER, DOWNTOWN_CORE, jitter } from '../../lib/geo';
 import { categoryMeta, PRIORITIES, STATUSES } from '../../lib/taxonomy';
 import { cn, timeAgo } from '../../lib/format';
+import type { MpdFeed } from '../../lib/mpd';
 import { AutoResize, FlyTo, type MapFocus } from './IncidentMap';
 import { incidentIcon, tileLayerProps } from './mapIcons';
 import MpdLayer, { MpdKey } from './MpdLayer';
@@ -18,18 +18,26 @@ export default function PublicIncidentMap({
   selected,
   onSelect,
   focus,
+  mpd,
+  mpdOn,
+  onMpdOn,
+  mpdSelected,
+  onMpdSelect,
 }: {
   incidents: PublicIncident[];
   selected: string | null;
   onSelect: (ref: string) => void;
   focus: MapFocus | null;
+  /** The MPD's own reports from the City's open data: a layer of their own, once it is turned on (lib/mpd.ts). */
+  mpd: MpdFeed;
+  mpdOn: boolean;
+  onMpdOn: (on: boolean) => void;
+  mpdSelected: string | null;
+  onMpdSelect: (id: string) => void;
 }) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const now = useNow();
-  // The MPD's own reports from the City's open data: a layer of their own, once it is turned on (lib/mpd.ts).
-  const mpd = useMpdIncidents();
-  const [mpdOn, setMpdOn] = useState(true);
   const showMpd = mpd.enabled && mpdOn;
 
   // Closed reports underneath, then the most urgent on top.
@@ -54,7 +62,7 @@ export default function PublicIncidentMap({
           pathOptions={{ color: '#c5a55a', weight: 1.5, dashArray: '6 6', fillColor: '#c5a55a', fillOpacity: dark ? 0.04 : 0.05 }}
           interactive={false}
         />
-        {showMpd && <MpdLayer feed={mpd} />}
+        {showMpd && <MpdLayer feed={mpd} selected={mpdSelected} onSelect={onMpdSelect} />}
         {ordered.map((i) => {
           const isSelected = i.ref === selected;
           const meta = categoryMeta(i.category);
@@ -88,7 +96,7 @@ export default function PublicIncidentMap({
       {mpd.enabled && (
         <button
           type="button"
-          onClick={() => setMpdOn((on) => !on)}
+          onClick={() => onMpdOn(!mpdOn)}
           aria-pressed={mpdOn}
           className={cn(
             'absolute right-3 top-3 z-[500] inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[12px] font-semibold shadow-pop transition-colors',
