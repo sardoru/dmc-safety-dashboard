@@ -240,7 +240,11 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 3. Deploy. [`vercel.json`](./vercel.json) configures the SPA rewrite, function limits,
    image optimization and caching headers.
 
-> This project deploys with the CLI (`vercel --prod`) — merging to `main` does not deploy.
+> **Merging to `main` deploys.** The Vercel project is connected to this GitHub repo (since
+> 2026-10-10): production branch `main`, custom domains assigned automatically. Every other branch
+> gets a preview deployment, behind Vercel login. `vercel --prod` still works for a manual deploy.
+> **A PR that needs a database migration:** apply the migration before merging, because the merge
+> is the deploy.
 
 `vercel.json` also schedules one cron job — `/api/cron/invites` every 15 minutes, for
 [Inviting a list](#inviting-a-list-paced). Vercel runs crons on the production deployment only, and
@@ -374,7 +378,7 @@ safety meeting's sign-in sheet — a few at a time: **5 every 15 minutes**. The 
 > **Before first use:** (1) apply [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql)
 > and [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql) to the
 > production database, (2) set **`CRON_SECRET`** in Vercel → Production — at least 16 characters, for
-> example `openssl rand -hex 32`, (3) deploy (`vercel --prod`). Vercel registers the cron from
+> example `openssl rand -hex 32`, (3) deploy (merge to `main`, or `vercel --prod`). Vercel registers the cron from
 > `vercel.json` on that deploy (Project → Settings → Cron Jobs). **Apply 0008 before deploying 0.4.9**:
 > it only adds columns, so the previous app keeps working; the new app needs them — without them the
 > card and the cron answer 503 and nothing goes out. Without `CRON_SECRET`, or with one under 16
