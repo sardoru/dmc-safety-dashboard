@@ -27,6 +27,7 @@ import { isOpen } from '../lib/taxonomy';
 import { cn } from '../lib/format';
 import { FILM_DURATION, JOIN_FILM_DURATION, REPORT_FILM_DURATION, SHORT_FILM_DURATION } from '../film/filmMeta';
 import { formatTime } from '../film/time';
+import HeroFilm from '../film/HeroFilm';
 import Logo, { LogoMark } from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
 import PoliceScanner from '../components/PoliceScanner';
@@ -138,12 +139,14 @@ export default function Landing() {
           </div>
         </nav>
 
-        <div className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 sm:pb-28 sm:pt-20">
+        {/* Two columns from lg: the words on the left, the 30-second film on the right (below them on a phone). */}
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-20 pt-12 sm:px-6 sm:pb-28 sm:pt-20 lg:grid-cols-2 lg:gap-12">
           <div className="max-w-2xl animate-slide-up">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.16em] text-gold-200 backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> A self-regulated safety dashboard
             </p>
-            <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+            {/* Beside the film the headline steps down, so "Downtown Memphis," still fits on one line. */}
+            <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-[2.6rem] xl:text-[3.15rem]">
               Downtown Memphis, watching out for each other.
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-navy-100 sm:text-lg">
@@ -177,11 +180,6 @@ export default function Landing() {
               )}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2">
-              {SHORT_FILM_DURATION > 0 && (
-                <a href="/in-30-seconds" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
-                  <CirclePlay className="h-5 w-5" /> Watch in 30 seconds · {formatTime(SHORT_FILM_DURATION)}
-                </a>
-              )}
               {FILM_DURATION > 0 && (
                 <a href="/how-it-works" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
                   <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
@@ -208,6 +206,7 @@ export default function Landing() {
               Someone in danger? Call 911 first — this is not an emergency line.
             </a>
           </div>
+          {SHORT_FILM_DURATION > 0 && <HeroFilm className="animate-slide-up [animation-delay:120ms]" />}
         </div>
       </header>
 

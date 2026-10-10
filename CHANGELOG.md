@@ -19,8 +19,17 @@ All notable changes to the Core Downtown Memphis Safety Dashboard. Format follow
   It is in light mode, with the same narrator and the same rules as the other films: "a
   self-regulated safety dashboard", no AI wording, and the S Main St sample report. It was made in
   `~/videos/dmc-safety-in-30-seconds`.
-- **Links to it, first in each list:** "Watch in 30 seconds · 0:30" in the landing page hero, and
-  "In 30 seconds · 0:30" in the footer.
+- **In the landing page hero, on the right.** The film fills the hero's empty right half, so it is
+  the first thing a visitor sees (`src/film/HeroFilm.tsx`).
+  - On a wide screen it starts at once, muted and on a loop, with the captions on. It does not
+    start by itself with reduced motion or a data saver set.
+  - "Watch with sound" plays it from the start, with sound and the browser's controls.
+  - A pause button stops the loop, and the loop pauses while the hero is off screen.
+  - On a phone it sits below the hero text, behind its poster with a play button.
+  - The poster goes through the image service; the captions use the site's type.
+  - Beside the film, the headline steps down (42 px at `lg`, 50 px at `xl`), so "Downtown
+    Memphis," keeps one line.
+  - The footer has "In 30 seconds · 0:30".
 - **Its own page** (`in-30-seconds.html`), with chapters, a transcript, captions, VideoObject
   JSON-LD and a share card (`public/video/in-30-seconds/og-image.png`).
 - **Script support for the fourth film:** `scripts/film-data.mjs --film in-30-seconds` and

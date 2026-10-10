@@ -510,3 +510,14 @@
   border: 3px solid #fff;
   box-shadow: 0 3px 8px rgb(0 0 0 / 0.35);
 }
+
+/* The landing hero's 30-second film (src/film/HeroFilm.tsx): captions in the site's type on a navy backing,
+   a little larger than the browser's default (which is a share of the video's height), so they read on a card
+   about 500px wide and still scale up in full screen. */
+.hero-film video::cue {
+  background-color: rgb(7 11 22 / 0.8);
+  color: #ffffff;
+  font-family: var(--font-stack);
+  font-size: 112%;
+  line-height: 1.35;
+}
