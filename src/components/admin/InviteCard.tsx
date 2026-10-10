@@ -122,7 +122,8 @@ export default function InviteCard({ isDemo, members, invites, currentEmail, onC
   };
 
   return (
-    <Card>
+    // #invite: "Invite someone" on the Settings page (phones) lands here.
+    <Card id="invite" className="scroll-mt-4">
       <CardHeader
         icon={<UserPlus className="h-[18px] w-[18px]" />}
         title="Invite someone"

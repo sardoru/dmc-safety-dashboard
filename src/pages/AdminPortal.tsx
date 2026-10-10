@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, type ReactNode } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Activity, Building2, History, Hourglass, Server, Ticket, TriangleAlert, Users } from 'lucide-react';
 import AccessPanel from '../components/admin/AccessPanel';
 import ActivityPanel from '../components/admin/ActivityPanel';
@@ -50,6 +50,15 @@ export default function AdminPortal() {
   const [params, setParams] = useSearchParams();
   const tab = parseTab(params.get('tab'));
   const setTab = (next: Tab) => setParams(next === 'team' ? {} : { tab: next }, { replace: true });
+
+  // /admin#invite ("Invite someone" on the Settings page, phones): the Team tab is the default; bring its
+  // invite form into view.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash !== '#invite') return;
+    const frame = requestAnimationFrame(() => document.getElementById('invite')?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [hash]);
 
   const lastDay = useMemo(() => {
     const recent = incidents.filter((i) => i.createdAt >= now - DAY_MS);
