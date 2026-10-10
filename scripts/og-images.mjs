@@ -5,6 +5,7 @@
  *   public/video/og-image.png  — the "How it works" film page
  *   public/video/how-to-report/og-image.png — the "How to report" film page
  *   public/video/how-to-join/og-image.png — the "How to join" film page
+ *   public/video/in-30-seconds/og-image.png — the 30-second film page
  *   public/og/join.png         — /join (access codes)
  *   public/og/live.png         — /live (the public map)
  *
@@ -44,6 +45,7 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStar
 const filmLength = clock(Number(filmMeta.match(/\bFILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 const reportFilmLength = clock(Number(filmMeta.match(/\bREPORT_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 const joinFilmLength = clock(Number(filmMeta.match(/\bJOIN_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
+const shortFilmLength = clock(Number(filmMeta.match(/\bSHORT_FILM_DURATION = ([\d.]+)/)?.[1] ?? 0));
 
 const qr = (url) =>
   QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#0b1222', light: '#ffffff' } });
@@ -132,6 +134,15 @@ const cards = [
       <p class="lede">Register your business with only an email, or join with an access code — then take part.</p>
       <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${joinFilmLength}</div>
       ${sos}${scan(await qr(`${SITE}/how-to-join`), `${SITE_SHORT}/how-to-join`)}`),
+  },
+  {
+    out: join(ROOT, 'public', 'video', 'in-30-seconds', 'og-image.png'),
+    html: page(`${brand}
+      <div class="eyebrow">In 30 seconds · film · ${shortFilmLength}</div>
+      <h1>The Safety Dashboard<br><em>in 30 seconds</em></h1>
+      <p class="lede">Report what you see. Officers respond, and you get updates. Nearby alerts and the live map.</p>
+      <div class="play"><span><svg width="16" height="18" viewBox="0 0 18 20"><path d="M2 1.5 L16.5 10 L2 18.5 Z" fill="#d4b566"/></svg></span>Watch · ${shortFilmLength}</div>
+      ${sos}${scan(await qr(`${SITE}/in-30-seconds`), `${SITE_SHORT}/in-30-seconds`)}`),
   },
   {
     out: join(ROOT, 'public', 'og', 'join.png'),

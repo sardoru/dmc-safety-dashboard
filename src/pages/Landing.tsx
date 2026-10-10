@@ -25,7 +25,7 @@ import { useNow } from '../hooks/useNow';
 import type { Role } from '../types';
 import { isOpen } from '../lib/taxonomy';
 import { cn } from '../lib/format';
-import { FILM_DURATION, JOIN_FILM_DURATION, REPORT_FILM_DURATION } from '../film/filmMeta';
+import { FILM_DURATION, JOIN_FILM_DURATION, REPORT_FILM_DURATION, SHORT_FILM_DURATION } from '../film/filmMeta';
 import { formatTime } from '../film/time';
 import Logo, { LogoMark } from '../components/brand/Logo';
 import BrandImage from '../components/brand/BrandImage';
@@ -177,6 +177,11 @@ export default function Landing() {
               )}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+              {SHORT_FILM_DURATION > 0 && (
+                <a href="/in-30-seconds" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
+                  <CirclePlay className="h-5 w-5" /> Watch in 30 seconds · {formatTime(SHORT_FILM_DURATION)}
+                </a>
+              )}
               {FILM_DURATION > 0 && (
                 <a href="/how-it-works" className="flex w-fit items-center gap-2 text-sm font-semibold text-gold-200 hover:text-white">
                   <CirclePlay className="h-5 w-5" /> Watch how it works · {formatTime(FILM_DURATION)}
@@ -378,6 +383,13 @@ export default function Landing() {
                 <li>
                   <a href="#how" className="hover:text-ink">How it works</a>
                 </li>
+                {SHORT_FILM_DURATION > 0 && (
+                  <li>
+                    <a href="/in-30-seconds" className="hover:text-ink">
+                      In 30 seconds · {formatTime(SHORT_FILM_DURATION)}
+                    </a>
+                  </li>
+                )}
                 {FILM_DURATION > 0 && (
                   <li>
                     <a href="/how-it-works" className="hover:text-ink">

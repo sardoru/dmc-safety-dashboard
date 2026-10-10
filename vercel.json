@@ -48,6 +48,7 @@
     { "source": "/how-it-works", "destination": "/how-it-works.html" },
     { "source": "/how-to-report", "destination": "/how-to-report.html" },
     { "source": "/how-to-join", "destination": "/how-to-join.html" },
+    { "source": "/in-30-seconds", "destination": "/in-30-seconds.html" },
     { "source": "/join", "destination": "/join.html" },
     { "source": "/live", "destination": "/live.html" },
     { "source": "/((?!api/|assets/|_vercel/).*)", "destination": "/index.html" }

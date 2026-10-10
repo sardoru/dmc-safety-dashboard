@@ -3,6 +3,29 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.10] — 2026-10-10 — The Safety Dashboard in 30 seconds
+
+> No migration. Deploy as usual (`vercel --prod` from `main`).
+
+### Added
+- **A 30-second film: [/in-30-seconds](https://www.901safety.com/in-30-seconds).** The three films
+  in one fast cut:
+  - report what you see, by voice, with the guided form or with a quick alert;
+  - officers respond, and you get updates;
+  - nearby alerts and the Lookout board;
+  - the public live map;
+  - registering with only a work email, then "Scan the code to join".
+
+  It is in light mode, with the same narrator and the same rules as the other films: "a
+  self-regulated safety dashboard", no AI wording, and the S Main St sample report. It was made in
+  `~/videos/dmc-safety-in-30-seconds`.
+- **Links to it, first in each list:** "Watch in 30 seconds · 0:30" in the landing page hero, and
+  "In 30 seconds · 0:30" in the footer.
+- **Its own page** (`in-30-seconds.html`), with chapters, a transcript, captions, VideoObject
+  JSON-LD and a share card (`public/video/in-30-seconds/og-image.png`).
+- **Script support for the fourth film:** `scripts/film-data.mjs --film in-30-seconds` and
+  `scripts/og-images.mjs` now handle it.
+
 ## [0.4.9] — 2026-10-09 — Paced invitations: brakes and no repeats
 
 > **Before deploying:** apply `supabase/migrations/0008_invite_queue_brakes.sql` (it only adds
