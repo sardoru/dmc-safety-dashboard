@@ -191,7 +191,9 @@ function MobileTopBar() {
 function MobileTabs() {
   const { role } = useAuth();
   const { incidents } = useIncidents();
-  const items = navFor(role).filter((n) => n.to !== '/admin' && n.to !== '/account').slice(0, 4);
+  // Everything in the main nav but Settings (the avatar in the top bar opens it). Administrators keep
+  // Administration, where invites and access codes live — five tabs at most.
+  const items = navFor(role).filter((n) => n.to !== '/account').slice(0, 5);
   const openNew = incidents.filter((i) => isOpen(i.status) && i.status === 'active').length;
   return (
     <nav
