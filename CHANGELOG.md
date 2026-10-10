@@ -3,6 +3,32 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.14] — 2026-10-10 — MPD reports in "Latest reports"
+
+> No migration.
+
+### Added
+- **The MPD's reports are listed under "Latest reports" on the public live map.** The map showed
+  them as diamonds, but the list beside it (below it on a phone) had only the reports filed on the
+  dashboard.
+  - They come after the dashboard's reports, newest first, under an "MPD reports · last 7 days"
+    heading that stays in view while you scroll them. The City publishes them a few days late, so
+    they keep their own 7-day window whatever window is picked.
+  - Each row gives the category, when it was reported and the block or intersection.
+  - Tapping a row opens it in place: the offenses, the report time in Memphis (and when it
+    happened, if more than an hour earlier) and the MPD incident number. The map flies to its
+    diamond, rings it in gold and opens its card. A second tap closes the row.
+  - Tapping a diamond on the map opens its row and scrolls the list to it; the page stays put.
+  - The City's citation and the "preliminary reports" note close the list.
+  - "All" counts and shows them. "Open" and "Resolved" leave them out, because the City's reports
+    have no status here. Turning the map's "MPD reports" toggle off takes them off the list too.
+  - With no dashboard reports in the window, the list says so in one line and still shows the
+    MPD's.
+
+### Changed
+- **The live map's privacy note** says its rules are for reports filed on the dashboard, and that
+  MPD reports appear as the City publishes them: to the block, and with no names.
+
 ## [0.4.13] — 2026-10-10 — Invites on a phone
 
 > No migration.

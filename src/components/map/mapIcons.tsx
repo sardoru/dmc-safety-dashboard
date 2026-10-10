@@ -78,17 +78,18 @@ export function boloIcon(): L.DivIcon {
 }
 
 /** An MPD report from the City's open data: a small slate diamond, unlike the community's round pins. */
-export function mpdIcon(): L.DivIcon {
-  const hit = cache.get('mpd');
+export function mpdIcon(selected = false): L.DivIcon {
+  const key = `mpd|${selected ? 1 : 0}`;
+  const hit = cache.get(key);
   if (hit) return hit;
   const icon = L.divIcon({
     className: 'leaflet-div-icon',
-    html: '<div class="dt-mpd"></div>',
+    html: `<div class="dt-mpd${selected ? ' is-selected' : ''}"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
     tooltipAnchor: [0, -9],
   });
-  cache.set('mpd', icon);
+  cache.set(key, icon);
   return icon;
 }
 

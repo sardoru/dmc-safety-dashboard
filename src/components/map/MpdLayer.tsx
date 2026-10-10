@@ -1,35 +1,54 @@
+import { useEffect, useRef } from 'react';
+import type { Marker as LeafletMarker } from 'leaflet';
 import { LayerGroup, Marker, Tooltip } from 'react-leaflet';
 import { useNow } from '../../hooks/useNow';
-import { jitter } from '../../lib/geo';
 import { timeAgo } from '../../lib/format';
-import { MPD_NOTE, mpdCitation, ucrLabel, type MpdFeed } from '../../lib/mpd';
+import { MPD_NOTE, memphisTime, mpdCitation, mpdHappened, mpdOffenses, mpdPosition, ucrLabel, type MpdFeed } from '../../lib/mpd';
 import { mpdIcon } from './mapIcons';
-
-const memphisTime = (ms: number) =>
-  new Date(ms).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 /**
  * The MPD's reports from the City's open data, as their own layer: slate diamonds under the community's pins. The
- * City's citation goes into the map's attribution line for as long as the layer is on.
+ * City's citation goes into the map's attribution line for as long as the layer is on. With `onSelect` a diamond can
+ * be picked (the public map lists them); the picked one sits on top, ringed, with its card open.
  */
-export default function MpdLayer({ feed }: { feed: MpdFeed }) {
+export default function MpdLayer({
+  feed,
+  selected = null,
+  onSelect,
+}: {
+  feed: MpdFeed;
+  selected?: string | null;
+  onSelect?: (id: string) => void;
+}) {
   const now = useNow();
+  const markers = useRef(new Map<string, LeafletMarker>());
   const incidents = feed.incidents ?? [];
   const url = feed.source?.url ?? 'https://data.memphistn.gov';
   const attribution = `MPD reports: <a href="${url}" target="_blank" rel="noopener noreferrer">${mpdCitation(feed)}</a>`;
 
+  useEffect(() => {
+    const marker = selected ? markers.current.get(selected) : undefined;
+    marker?.openTooltip();
+    return () => void marker?.closeTooltip();
+  }, [selected]);
+
   return (
     <LayerGroup attribution={attribution}>
       {incidents.map((m) => {
-        // The offense line, unless it only repeats the category ("Arson" · "Arson").
-        const offenses = m.offenses.map(ucrLabel).filter((o) => o.toLowerCase() !== m.category.trim().toLowerCase());
+        const offenses = mpdOffenses(m);
+        const happened = mpdHappened(m);
+        const isSelected = m.id === selected;
         return (
           <Marker
             key={`mpd-${m.id}`}
-            // The City rounds places to ~100 m; spread reports that share a spot.
-            position={jitter(m.lat, m.lng, m.id, 14)}
-            icon={mpdIcon()}
-            zIndexOffset={-300}
+            ref={(marker) => {
+              if (marker) markers.current.set(m.id, marker);
+              else markers.current.delete(m.id);
+            }}
+            position={mpdPosition(m)}
+            icon={mpdIcon(isSelected)}
+            zIndexOffset={isSelected ? 1000 : -300}
+            eventHandlers={onSelect ? { click: () => onSelect(m.id) } : undefined}
             keyboard={false}
             title={`MPD report: ${ucrLabel(m.category)}`}
           >
@@ -40,7 +59,7 @@ export default function MpdLayer({ feed }: { feed: MpdFeed }) {
                 {offenses.length > 0 && <p className="text-[12px] leading-snug">{offenses.join(' · ')}</p>}
                 <p className="text-[11px] opacity-80">
                   Reported {timeAgo(m.reportedAt, now)} · {memphisTime(m.reportedAt)}
-                  {m.occurredAt && m.occurredAt < m.reportedAt - 3_600_000 ? ` (happened ${memphisTime(m.occurredAt)})` : ''}
+                  {happened ? ` (happened ${memphisTime(happened)})` : ''}
                 </p>
                 <p className="text-[11px] opacity-70">{m.address}</p>
                 <p className="mt-1 text-[10.5px] leading-snug opacity-70">Source: Memphis Police Department. {MPD_NOTE}</p>

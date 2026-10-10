@@ -5,6 +5,8 @@
  * once the City and MPD give permission.
  */
 
+import { jitter } from './geo';
+
 export interface MpdIncident {
   id: string;
   reportedAt: number;
@@ -33,6 +35,26 @@ export interface MpdFeed {
 export function ucrLabel(s: string): string {
   const t = s.trim().toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** The offense lines, unless one only repeats the category ("Arson" · "Arson"). */
+export function mpdOffenses(m: MpdIncident): string[] {
+  return m.offenses.map(ucrLabel).filter((o) => o.toLowerCase() !== m.category.trim().toLowerCase());
+}
+
+/** When it happened, if that was more than an hour before it was reported. */
+export function mpdHappened(m: MpdIncident): number | null {
+  return m.occurredAt && m.occurredAt < m.reportedAt - 3_600_000 ? m.occurredAt : null;
+}
+
+/** Where its diamond sits: the City rounds places to ~100 m, so reports that share a spot are spread a little. */
+export function mpdPosition(m: MpdIncident): [number, number] {
+  return jitter(m.lat, m.lng, m.id, 14);
+}
+
+/** "Oct 7, 9:23 PM", in Memphis. */
+export function memphisTime(ms: number): string {
+  return new Date(ms).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 /** "City of Memphis, Open Data Program, MPD Public Safety Incidents, accessed Oct 10, 2026, data.memphistn.gov" */
