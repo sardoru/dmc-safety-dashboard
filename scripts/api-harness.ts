@@ -22,6 +22,8 @@ import {
   type ReportRow,
 } from '../src/lib/incidentRows.ts';
 import { applyFeedChange, mergeFeeds } from '../src/lib/feed.ts';
+import { DOWNTOWN_CORE as API_DOWNTOWN_CORE, mpdAddress } from '../api/_lib/mpd.ts';
+import { DOWNTOWN_CORE } from '../src/lib/geo.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -1249,6 +1251,8 @@ async function main() {
     { staffInsert, step },
   );
 
+  await mpdChecks();
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
@@ -1806,6 +1810,95 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
     return BANNED.filter(([, re]) => re.test(text)).map(([w]) => `${file}: ${w}`);
   });
   check('the queue’s outcomes, messages and Admin → Team card: no AI, model, bot or smart wording', wordHits.length === 0, wordHits);
+}
+
+// ---------------------------------------------------------------- MPD open data (off until the City and MPD say yes)
+async function mpdChecks() {
+  console.log('api/mpd-incidents');
+  const H = 3_600_000;
+  const now = Date.now();
+  const inside = { Latitude: 35.14, Longitude: -90.051 };
+  const rows = [
+    // one incident, three offense lines (one repeated)
+    { Crime_ID: 'C1', Reported_Datetime: now - 2 * H, Offense_Datetime: now - 3 * H, UCR_Category: 'DRUG/NARCOTIC', UCR_Description: 'DRUG/NARCOTIC VIOLS', Part_One_or_Part_Two: 2, Block: 200, Street_Name: 'PEABODY PL', ...inside },
+    { Crime_ID: 'C1', Reported_Datetime: now - 2 * H, Offense_Datetime: now - 3 * H, UCR_Category: 'WEAPON LAW VIOLATION', UCR_Description: 'WEAPON LAW VIOL', Part_One_or_Part_Two: 2, Block: 200, Street_Name: 'PEABODY PL', ...inside },
+    { Crime_ID: 'C1', Reported_Datetime: now - 2 * H, Offense_Datetime: now - 3 * H, UCR_Category: 'DRUG/NARCOTIC', UCR_Description: 'DRUG/NARCOTIC VIOLS', Part_One_or_Part_Two: 2, Block: 200, Street_Name: 'PEABODY PL', ...inside },
+    // the newest, at an intersection
+    { Crime_ID: 'C2', Reported_Datetime: now - 1 * H, Offense_Datetime: now - 1 * H, UCR_Category: 'LARCENY/THEFT', UCR_Description: 'SHOPLIFTING', Part_One_or_Part_Two: 1, Block: 0, Street_Name: ' RIVERSIDE DR//JEFFERSON AVE', Latitude: 35.148, Longitude: -90.054 },
+    // a Part Two line first, then a Part One line: the incident takes the Part One category
+    { Crime_ID: 'C6', Reported_Datetime: now - 3 * H, Offense_Datetime: null, UCR_Category: 'DEST/DAM/VAND OF PROPERTY', UCR_Description: 'DEST/DAM/VAND OF PROPERTY', Part_One_or_Part_Two: 2, Block: 100, Street_Name: 'S MAIN ST', ...inside },
+    { Crime_ID: 'C6', Reported_Datetime: now - 3 * H, Offense_Datetime: null, UCR_Category: 'BURGLARY', UCR_Description: 'BURGLARY/B&E', Part_One_or_Part_Two: 1, Block: 100, Street_Name: 'S MAIN ST', ...inside },
+    // dropped: outside the downtown core, older than 7 days, no place
+    { Crime_ID: 'C3', Reported_Datetime: now - 1 * H, UCR_Category: 'ROBBERY', UCR_Description: 'ROBBERY', Part_One_or_Part_Two: 1, Latitude: 35.1, Longitude: -90.0 },
+    { Crime_ID: 'C4', Reported_Datetime: now - 8 * 24 * H, UCR_Category: 'ARSON', UCR_Description: 'ARSON', Part_One_or_Part_Two: 1, ...inside },
+    { Crime_ID: 'C5', Reported_Datetime: now - 1 * H, UCR_Category: 'ASSAULT', UCR_Description: 'SIMPLE ASSAULT', Part_One_or_Part_Two: 2, Latitude: null, Longitude: null },
+  ];
+  const arcgis = (url: string) => url.includes('MPD_Public_Safety_Incidents/FeatureServer/0/query');
+
+  delete process.env.MPD_LAYER;
+  calls.length = 0;
+  let r = await run('api/mpd-incidents.ts', 'GET', null);
+  check('off unless MPD_LAYER=on: { enabled: false }, the City is not asked', r.statusCode === 200 && r.data.enabled === false && !calls.some((c) => arcgis(c.url)), r.data);
+  check('the "off" answer is cached 5 minutes', /s-maxage=300/.test(r.headers['cache-control'] ?? ''), r.headers);
+  r = await run('api/mpd-incidents.ts', 'POST', null);
+  check('POST → 405', r.statusCode === 405, r.data);
+
+  process.env.MPD_LAYER = 'on';
+  calls.length = 0;
+  upstream = (url) => (arcgis(url) ? json(200, { features: rows.map((attributes) => ({ attributes })) }) : null);
+  r = await run('api/mpd-incidents.ts', 'GET', null);
+  const q = calls.find((c) => arcgis(c.url));
+  const sent = new URLSearchParams(String(q?.body ?? ''));
+  const ring = JSON.parse(sent.get('geometry') ?? '{}').rings?.[0] ?? [];
+  check(
+    'asks the City once, by POST: reported in the last 7 days (UTC timestamp), inside the downtown core, newest first',
+    q?.method === 'POST' && /^Reported_Datetime >= TIMESTAMP '\d{4}-\d\d-\d\d \d\d:00:00'$/.test(sent.get('where') ?? '') &&
+      sent.get('spatialRel') === 'esriSpatialRelIntersects' && sent.get('inSR') === '4326' && sent.get('orderByFields') === 'Reported_Datetime DESC' &&
+      ring.length === DOWNTOWN_CORE.length + 1 && ring[0][0] === DOWNTOWN_CORE[0][1] && ring[0][1] === DOWNTOWN_CORE[0][0],
+    { method: q?.method, where: sent.get('where'), ring: ring.slice(0, 2) },
+  );
+  const list = (r.data.incidents ?? []) as { id: string; category: string; offenses: string[]; part: number; address: string; occurredAt: number | null }[];
+  const byId = Object.fromEntries(list.map((i) => [i.id, i]));
+  check('200, enabled, newest report first; outside the core, older than 7 days and placeless rows are left out', r.statusCode === 200 && r.data.enabled === true && list.map((i) => i.id).join(',') === 'C2,C1,C6', list.map((i) => i.id));
+  check('the offense lines of one report become one incident, without repeats', JSON.stringify(byId.C1?.offenses) === JSON.stringify(['DRUG/NARCOTIC VIOLS', 'WEAPON LAW VIOL']), byId.C1);
+  check('a Part One line gives the incident its category', byId.C6?.category === 'BURGLARY' && byId.C6?.part === 1 && byId.C6?.occurredAt === null, byId.C6);
+  check('block-level addresses: "200 block of Peabody Pl", "Riverside Dr & Jefferson Ave"', byId.C1?.address === '200 block of Peabody Pl' && byId.C2?.address === 'Riverside Dr & Jefferson Ave', [byId.C1?.address, byId.C2?.address]);
+  check(
+    'carries the City’s citation and the dataset link; cached 30 minutes at the edge',
+    r.data.source?.citation === 'City of Memphis, Open Data Program, MPD Public Safety Incidents' && /data\.memphistn\.gov\/datasets\/12b51ce4d5a14493ab6cc05d32e0c1ee_0$/.test(r.data.source?.url ?? '') &&
+      !Number.isNaN(Date.parse(r.data.accessedAt)) && r.data.windowDays === 7 && /s-maxage=1800/.test(r.headers['cache-control'] ?? ''),
+    { source: r.data.source, cache: r.headers['cache-control'] },
+  );
+
+  // more than one page
+  calls.length = 0;
+  upstream = (url, init) => {
+    if (!arcgis(url)) return null;
+    const offset = new URLSearchParams(String(init.body ?? '')).get('resultOffset');
+    return offset === '0' ? json(200, { features: rows.slice(0, 3).map((attributes) => ({ attributes })), exceededTransferLimit: true }) : json(200, { features: rows.slice(3).map((attributes) => ({ attributes })) });
+  };
+  r = await run('api/mpd-incidents.ts', 'GET', null);
+  check('follows the City’s paging (resultOffset 0, then 1000)', calls.filter((c) => arcgis(c.url)).length === 2 && (r.data.incidents ?? []).length === 3, calls.map((c) => new URLSearchParams(String(c.body ?? '')).get('resultOffset')));
+
+  // a dropped connection gets one more try; a server error twice → 502, cached a minute
+  let tries = 0;
+  upstream = (url) => {
+    if (!arcgis(url)) return null;
+    if (++tries === 1) throw new TypeError('fetch failed');
+    return json(200, { features: rows.map((attributes) => ({ attributes })) });
+  };
+  r = await run('api/mpd-incidents.ts', 'GET', null);
+  check('a dropped connection is tried once more', r.statusCode === 200 && tries === 2 && (r.data.incidents ?? []).length === 3, { status: r.statusCode, tries });
+  tries = 0;
+  upstream = (url) => (arcgis(url) ? (tries++, json(500, { error: 'busy' })) : null);
+  r = await run('api/mpd-incidents.ts', 'GET', null);
+  check('the City’s service fails twice → 502 with a plain message, cached a minute', r.statusCode === 502 && tries === 2 && /did not answer/.test(r.data.error ?? '') && /s-maxage=60/.test(r.headers['cache-control'] ?? ''), { status: r.statusCode, tries, data: r.data });
+
+  check('the API’s downtown core is the map’s (src/lib/geo.ts DOWNTOWN_CORE)', JSON.stringify(API_DOWNTOWN_CORE) === JSON.stringify(DOWNTOWN_CORE));
+  check('a street with no block number stays the street', mpdAddress({ Block: 0, Street_Name: 'BASS PRO DR' }) === 'Bass Pro Dr', mpdAddress({ Block: 0, Street_Name: 'BASS PRO DR' }));
+
+  delete process.env.MPD_LAYER;
+  upstream = () => null;
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

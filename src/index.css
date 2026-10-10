@@ -511,6 +511,34 @@
   box-shadow: 0 3px 8px rgb(0 0 0 / 0.35);
 }
 
+/* An MPD report from the City's open data (src/components/map/MpdLayer.tsx): a slate diamond, unlike the
+   community's round pins. */
+.dt-mpd {
+  width: 11px;
+  height: 11px;
+  margin: 2.5px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  background: #475569;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+}
+.dark .dt-mpd {
+  background: #cbd5e1;
+  border-color: #0b1222;
+}
+.dt-mpd-key {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  border-radius: 1.5px;
+  background: #475569;
+}
+.dark .dt-mpd-key {
+  background: #cbd5e1;
+}
+
 /* The landing hero's 30-second film (src/film/HeroFilm.tsx): captions in the site's type on a navy backing,
    a little larger than the browser's default (which is a share of the video's height), so they read on a card
    about 500px wide and still scale up in full screen. */

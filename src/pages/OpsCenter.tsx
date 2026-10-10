@@ -257,6 +257,7 @@ export default function OpsCenter() {
         businesses={businesses}
         bolos={activeBolos}
         focus={focus}
+        mpd
       />
     </ErrorBoundary>
   );
