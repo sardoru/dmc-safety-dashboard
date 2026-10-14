@@ -32,10 +32,15 @@ interface InviteCardProps {
 }
 
 function asRole(value: string): Role {
-  return value === 'admin' || value === 'officer' ? value : 'business';
+  return value === 'admin' || value === 'officer' || value === 'dmc' ? value : 'business';
 }
 
-/** Admin › Team: invite a member business, a Public Safety officer or an administrator by email. */
+/** Why an invitation kept someone's role: it never lowers one, and never switches officer and DMC (the same access). */
+function keptNote(now: Role, asked: Role): string {
+  return ROLE_RANK[now] > ROLE_RANK[asked] ? ' — an invitation never lowers a role' : ', with the same access — an invitation doesn’t switch between them';
+}
+
+/** Admin › Team: invite a member business, a Public Safety officer, DMC or an administrator by email. */
 export default function InviteCard({ isDemo, members, invites, currentEmail, onChanged }: InviteCardProps) {
   const { push } = useToast();
   const [email, setEmail] = useState('');
@@ -60,7 +65,9 @@ export default function InviteCard({ isDemo, members, invites, currentEmail, onC
       setError(
         existing.role === role
           ? `${memberName(existing)} already has ${ROLE_LABEL[role]} access.`
-          : `${memberName(existing)} is already ${roleNoun(existing.role)} — an invitation never lowers a role.`,
+          : ROLE_RANK[existing.role] > ROLE_RANK[role]
+            ? `${memberName(existing)} is already ${roleNoun(existing.role)} — an invitation never lowers a role.`
+            : `${memberName(existing)} is already ${roleNoun(existing.role)}, with the same access. To switch, remove their access in the team list, then invite them again.`,
       );
       return;
     }
@@ -96,13 +103,13 @@ export default function InviteCard({ isDemo, members, invites, currentEmail, onC
       } else if (result.status === 'unchanged') {
         push({
           title: 'Already a member',
-          body: `${address} already ${now === role ? `has ${ROLE_LABEL[now]} access` : `is ${roleNoun(now)} — an invitation never lowers a role`}. ${emailed}`,
+          body: `${address} already ${now === role ? `has ${ROLE_LABEL[now]} access` : `is ${roleNoun(now)}${keptNote(now, role)}`}. ${emailed}`,
           tone: 'info',
         });
       } else if (now !== role) {
         push({
           title: 'Invitation re-sent',
-          body: `${address} already has an invitation as ${roleNoun(now)} — an invitation never lowers a role. We sent it again.`,
+          body: `${address} already has an invitation as ${roleNoun(now)}${keptNote(now, role)}. We sent it again.`,
           tone: 'info',
         });
       } else {

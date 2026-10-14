@@ -13,8 +13,9 @@ import { speech, type SpeakOptions, type SpeechEngineKind, type SpeechState } fr
 import { apiFetch } from '../lib/api';
 import { nearbyAnnouncement, officerAnnouncement, statusAnnouncement } from '../lib/announce';
 import { distanceMiles } from '../lib/geo';
+import { isStaff } from '../lib/roles';
 import { categoryMeta, STATUSES } from '../lib/taxonomy';
-import type { Priority } from '../types';
+import type { Priority, Role } from '../types';
 import { useAuth } from './AuthContext';
 import { useIncidents } from './IncidentContext';
 import { useProfile } from './ProfileContext';
@@ -75,12 +76,12 @@ const VoiceContext = createContext<VoiceContextType | null>(null);
 
 const NEARBY_MILES = 0.5;
 
-function defaultPrefs(role: string | null): VoicePrefs {
-  const staff = role === 'officer' || role === 'admin';
+function defaultPrefs(role: Role | null): VoicePrefs {
+  const staff = isStaff(role);
   return { voiceId: null, alerts: staff, minPriority: staff ? 3 : 2, readBack: true, guide: false };
 }
 
-function loadPrefs(role: string | null): VoicePrefs {
+function loadPrefs(role: Role | null): VoicePrefs {
   try {
     const raw = localStorage.getItem(`dt-voice-prefs-${role ?? 'guest'}`);
     if (raw) return { ...defaultPrefs(role), ...(JSON.parse(raw) as Partial<VoicePrefs>) };
@@ -194,7 +195,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return subscribe((ev) => {
       const { role: r, prefs: p, profile: biz, userId: me, audioReady: ready, speak: say } = live.current;
-      const staff = r === 'officer' || r === 'admin';
+      const staff = isStaff(r);
       const inc = ev.incident;
 
       if (ev.type === 'created') {

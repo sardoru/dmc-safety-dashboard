@@ -89,7 +89,7 @@ createRoot(document.getElementById('root')!).render(
                               <Route
                                 path="/ops"
                                 element={
-                                  <RequireRole roles={['officer', 'admin']} redirect>
+                                  <RequireRole roles={['officer', 'dmc', 'admin']} redirect>
                                     <OpsCenter />
                                   </RequireRole>
                                 }
@@ -97,7 +97,7 @@ createRoot(document.getElementById('root')!).render(
                               <Route
                                 path="/insights"
                                 element={
-                                  <RequireRole roles={['officer', 'admin']}>
+                                  <RequireRole roles={['officer', 'dmc', 'admin']}>
                                     <Insights />
                                   </RequireRole>
                                 }

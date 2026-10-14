@@ -3,6 +3,51 @@
 All notable changes to the Core Downtown Memphis Safety Dashboard. Format follows
 [Keep a Changelog](https://keepachangelog.com/); newest first.
 
+## [0.4.15] — 2026-10-14 — The DMC role
+
+> **Before merging (the merge is the deploy):** apply `supabase/migrations/0009_dmc_role.sql` in the
+> Supabase SQL editor. It widens two role checks and redefines two functions. Nobody has the role
+> yet, so the current app keeps working. Without it, inviting someone as DMC fails on the role check.
+
+### Added
+- **A DMC role for the Downtown Memphis Commission, with exactly a Public Safety officer's access.**
+  - The Operations Center is their home screen. They get Insights, the Lookout board (publishing
+    BOLOs), triage (acknowledge, respond, resolve, assign, priority), internal notes, spoken alerts
+    and the shift briefing. They see every report, including officers-only ones, photos and
+    reporters' contact details.
+  - Reports a DMC member files count as Public Safety reports, as an officer's do. On the voice line
+    they get the officer's script.
+  - Nothing an administrator has: no Administration, invitations, access codes, settings or roles.
+    They can't change their own role.
+  - **The database decides.** `is_officer()`, behind every officer policy, write guard and the
+    report photos, now includes `dmc`. `role_rank('dmc')` is 2, the officers' rank.
+- **Invite as DMC:** Admin → Team → **Invite someone** → Invite as **DMC**.
+  - They get their own invitation, "Your DMC invitation": what they can do ("the same access as a
+    Public Safety officer"), first steps, the films with the Operations Center chapters, and the
+    private-link note.
+  - The Team list shows a teal **DMC** chip. **Remove DMC access** turns the account into a regular
+    business account, as for officers.
+- **`supabase/tests/0009_dmc_role.test.sql`** (plain Postgres, 25 checks):
+  - For every table in public, a DMC member reads exactly what an officer reads; the report photos
+    too.
+  - The officer work: filing, triage, internal notes, lookouts.
+  - Nothing that only administrators may read or do.
+  - The ranking, 0009 run again, and 0009 stopping on a leftover role check.
+- **API harness:** 23 checks.
+  - DMC is let into every endpoint an officer may call, and not into Invite someone.
+  - The officer persona on both voice lines.
+  - The DMC invitation in every way in and account state, the invite itself, the email hook, and
+    lists refusing DMC.
+
+### Changed
+- **Officer and DMC rank the same**, so an invitation or an access code never moves anyone between
+  them. Inviting an officer as DMC (or back) keeps their role and sends the guide for it, and Invite
+  someone says why ("with the same access"). To switch someone, remove their access in Team, then
+  invite them again.
+- **DMC is invited one at a time.** Access codes and requests to join still grant business or
+  officer, and Invite a list stays businesses only.
+- Demo mode doesn't offer DMC: it works exactly like the officer persona.
+
 ## [0.4.14] — 2026-10-10 — MPD reports in "Latest reports"
 
 > No migration.

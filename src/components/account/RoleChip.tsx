@@ -1,4 +1,4 @@
-import { BadgeCheck, ShieldCheck, Store } from 'lucide-react';
+import { BadgeCheck, Landmark, ShieldCheck, Store } from 'lucide-react';
 import type { Role } from '../../types';
 import { cn } from '../../lib/format';
 import { ROLE_LABEL } from '../layout/nav';
@@ -7,12 +7,13 @@ const ROLE_STYLE: Record<Role, string> = {
   admin: 'bg-accent-soft text-accent-strong ring-accent/30',
   officer:
     'bg-navy-50 text-navy-600 ring-navy-500/20 dark:bg-navy-400/15 dark:text-navy-100 dark:ring-navy-300/25',
+  dmc: 'bg-teal-50 text-teal-700 ring-teal-600/20 dark:bg-teal-500/10 dark:text-teal-300 dark:ring-teal-400/25',
   business: 'bg-surface-3 text-ink-2 ring-line-strong',
 };
 
-const ROLE_ICON = { admin: ShieldCheck, officer: BadgeCheck, business: Store } as const;
+const ROLE_ICON = { admin: ShieldCheck, officer: BadgeCheck, dmc: Landmark, business: Store } as const;
 
-/** Small pill naming an account's role ("Administrator", "Public Safety", "Business"). */
+/** Small pill naming an account's role ("Administrator", "Public Safety", "DMC", "Business"). */
 export default function RoleChip({ role, className }: { role: Role; className?: string }) {
   const Icon = ROLE_ICON[role];
   return (

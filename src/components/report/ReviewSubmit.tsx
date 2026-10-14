@@ -7,6 +7,7 @@ import { useVoice } from '../../context/VoiceContext';
 import { geocode } from '../../lib/geo';
 import { CATEGORIES, PRIORITIES, PRIORITY_LIST, suggestPriority } from '../../lib/taxonomy';
 import { cn } from '../../lib/format';
+import { isStaff } from '../../lib/roles';
 import LocationPicker from '../map/LocationPicker';
 import { Button } from '../ui/Button';
 import { Banner } from '../ui/Feedback';
@@ -43,7 +44,7 @@ export default function ReviewSubmit({ draft, setDraft, profile, onBack, onSubmi
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showIssues, setShowIssues] = useState(false);
-  const officer = role === 'officer' || role === 'admin';
+  const officer = isStaff(role);
   const update = (patch: Partial<ReportDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const ai = (f: string) => draft.aiFields.includes(f);
 

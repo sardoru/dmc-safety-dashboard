@@ -39,9 +39,9 @@ const NO_MEMBERS: TeamMember[] = [];
 const NO_INVITES: PendingInvite[] = [];
 
 /**
- * Officers, administrators and pending invites of every role (businesses
- * included, each labelled with its own role) — Supabase when connected, a
- * sample team in demo mode.
+ * Officers, DMC members, administrators and pending invites of every role
+ * (businesses included, each labelled with its own role) — Supabase when
+ * connected, a sample team in demo mode.
  */
 export function useTeam(): TeamState {
   const { isDemo } = useAuth();
@@ -56,7 +56,7 @@ export function useTeam(): TeamState {
       supabase
         .from('profiles')
         .select('id, email, role, display_name, created_at')
-        .in('role', ['officer', 'admin'])
+        .in('role', ['officer', 'dmc', 'admin'])
         .order('created_at', { ascending: true }),
       supabase
         .from('officer_invites')

@@ -6,6 +6,7 @@ import { useIncidents } from '../../context/IncidentContext';
 import { useVoice } from '../../context/VoiceContext';
 import { categoryMeta, suggestPriority } from '../../lib/taxonomy';
 import { shortAddress } from '../../lib/format';
+import { isStaff } from '../../lib/roles';
 import type { Place } from '../../lib/geo';
 import LocationPicker from '../map/LocationPicker';
 import { Button } from '../ui/Button';
@@ -31,7 +32,7 @@ export default function QuickAlert({ profile, onSubmitted }: QuickAlertProps) {
   const [changing, setChanging] = useState(!profile);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const officer = role === 'officer' || role === 'admin';
+  const officer = isStaff(role);
 
   const send = async () => {
     if (!category || !place) return;

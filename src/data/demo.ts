@@ -58,6 +58,8 @@ export const DEMO_PERSONAS: Record<Role, DemoPersona> = {
   business: { id: 'demo-user-business', name: 'Dana Whitfield', email: 'dana@riverbluff.example' },
   officer: { id: 'demo-user-officer', name: 'Officer T. Hayes', email: 't.hayes@downtownsafety.example' },
   admin: { id: 'demo-user-admin', name: 'Sgt. R. Delgado', email: 'r.delgado@downtownsafety.example' },
+  // Not offered by the demo's role pickers: DMC works exactly like an officer.
+  dmc: { id: 'demo-user-dmc', name: 'M. Ellis', email: 'm.ellis@dmc.example' },
 };
 
 const OFFICERS = [

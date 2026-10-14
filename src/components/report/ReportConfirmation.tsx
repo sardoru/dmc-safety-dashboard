@@ -6,6 +6,7 @@ import { useVoice } from '../../context/VoiceContext';
 import { confirmationReadback } from '../../lib/announce';
 import { categoryMeta } from '../../lib/taxonomy';
 import { shortAddress } from '../../lib/format';
+import { isStaff } from '../../lib/roles';
 import { Button, ButtonLink } from '../ui/Button';
 import ListenButton from '../voice/ListenButton';
 import { PriorityBadge } from '../incidents/Badges';
@@ -15,7 +16,7 @@ export default function ReportConfirmation({ incident, onAnother }: { incident: 
   const { role } = useAuth();
   const { prefs, speak } = useVoice();
   const spoken = useRef(false);
-  const officer = role === 'officer' || role === 'admin';
+  const officer = isStaff(role);
 
   useEffect(() => {
     if (spoken.current || !prefs.readBack || officer) return;

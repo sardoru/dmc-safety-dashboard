@@ -3,7 +3,7 @@ import { DEMO_PERSONAS } from '../../data/demo';
 
 export type StaffRole = Exclude<Role, 'business'>;
 
-/** An officer or administrator (a `profiles` row with a staff role). */
+/** An officer, DMC member or administrator (a `profiles` row with a staff role). */
 export interface TeamMember {
   id: string;
   email: string | null;
@@ -39,21 +39,22 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 function toStaffRole(role: string): StaffRole {
-  return role === 'admin' ? 'admin' : 'officer';
+  return role === 'admin' || role === 'dmc' ? role : 'officer';
 }
 
 /** Any role from the database; an unexpected value is shown as the least-privileged one. */
 function toRole(role: string): Role {
-  return role === 'admin' || role === 'officer' ? role : 'business';
+  return role === 'admin' || role === 'officer' || role === 'dmc' ? role : 'business';
 }
 
-/** Higher outranks lower. Invitations only ever raise a role. */
-export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, admin: 3 };
+/** Higher outranks lower. Invitations only ever raise a role. DMC ranks with officers (the same access). */
+export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, dmc: 2, admin: 3 };
 
 /** The roles an admin can invite, least access first. */
 export const INVITE_ROLES: { value: Role; label: string }[] = [
   { value: 'business', label: 'Member business' },
   { value: 'officer', label: 'Public Safety officer' },
+  { value: 'dmc', label: 'DMC' },
   { value: 'admin', label: 'Administrator' },
 ];
 
@@ -81,21 +82,28 @@ export function memberName(m: Pick<TeamMember, 'displayName' | 'email'>): string
   return m.displayName?.trim() || m.email?.split('@')[0] || 'Team member';
 }
 
-/** Administrators first, then alphabetical. */
+/** Administrators first, then everyone else alphabetically. */
 export function sortMembers(list: TeamMember[]): TeamMember[] {
-  return [...list].sort((a, b) =>
-    a.role === b.role ? memberName(a).localeCompare(memberName(b)) : a.role === 'admin' ? -1 : 1,
-  );
+  const first = (m: TeamMember) => (m.role === 'admin' ? 0 : 1);
+  return [...list].sort((a, b) => first(a) - first(b) || memberName(a).localeCompare(memberName(b)));
 }
 
+const ROLE_NOUN: Record<Role, string> = {
+  business: 'a member business',
+  officer: 'a Public Safety officer',
+  dmc: 'a DMC member',
+  admin: 'an administrator',
+};
+
 export function roleNoun(role: Role): string {
-  return role === 'admin' ? 'an administrator' : role === 'officer' ? 'a Public Safety officer' : 'a member business';
+  return ROLE_NOUN[role];
 }
 
 /** What each role gets — shown under the role picker. */
 export const ROLE_HINT: Record<Role, string> = {
   business: 'Reports incidents, follows their reports, and gets nearby alerts and the Lookout board.',
   officer: 'Works every report in the Operations Center, plus the Lookout board and Insights.',
+  dmc: 'The same access as a Public Safety officer: every report in the Operations Center, plus the Lookout board and Insights.',
   admin: 'Everything an officer can do, plus Team, Access, Businesses, Activity and System.',
 };
 

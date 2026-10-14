@@ -1,7 +1,8 @@
 import type { VercelRequest } from '@vercel/node';
 import { getAdmin } from './supabaseAdmin.js';
 
-export type Role = 'business' | 'officer' | 'admin';
+/** `dmc`: the Downtown Memphis Commission — exactly a Public Safety officer's access. */
+export type Role = 'business' | 'officer' | 'dmc' | 'admin';
 
 export interface AuthedUser {
   id: string;

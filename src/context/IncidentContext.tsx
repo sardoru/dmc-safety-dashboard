@@ -33,6 +33,7 @@ import {
 import { applyFeedChange, mergeFeeds, sortIncidents, type FeedChange } from '../lib/feed';
 import { generateId, incidentRef } from '../lib/format';
 import { photosToDataUrls, uploadReportPhotos } from '../lib/media';
+import { isStaff } from '../lib/roles';
 import { categoryMeta, PRIORITIES, STATUSES } from '../lib/taxonomy';
 import { buildDemoData, demoIncomingIncident } from '../data/demo';
 import { bumpNow } from '../hooks/useNow';
@@ -99,7 +100,7 @@ export function IncidentProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const demo = !configured;
   /** Officers and admins read every report; everyone else signed in reads like a member business. */
-  const staff = role === 'officer' || role === 'admin';
+  const staff = isStaff(role);
 
   const [demoState] = useState(() => (demo ? loadDemo() : null));
   const [incidents, setIncidents] = useState<Incident[]>(() => sortIncidents(demoState?.incidents ?? []));

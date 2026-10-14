@@ -14,7 +14,7 @@ const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
 
-  const guard = await requireRole(req, ['business', 'officer', 'admin']);
+  const guard = await requireRole(req, ['business', 'officer', 'dmc', 'admin']);
   if (!guard.ok) return sendError(res, guard.status, guard.error);
 
   const apiKey = process.env.OPENAI_API_KEY;

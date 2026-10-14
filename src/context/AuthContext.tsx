@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigured, SITE_URL } from '../lib/supabase';
 import { DEMO_PERSONAS } from '../data/demo';
 import { clearSignedPhotoUrls } from '../lib/media';
+import { isStaff } from '../lib/roles';
 import type { Profile, Role } from '../types';
 
 interface AuthContextType {
@@ -171,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId: persona?.id ?? user?.id ?? null,
         displayName,
         email,
-        isOfficer: role === 'officer' || role === 'admin',
+        isOfficer: isStaff(role),
         isAdmin: role === 'admin',
         sendMagicLink,
         signOut,

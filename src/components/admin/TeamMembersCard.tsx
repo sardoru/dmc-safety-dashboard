@@ -16,6 +16,9 @@ import ListSkeleton from './ListSkeleton';
 import MemberPasskeysDialog from './MemberPasskeysDialog';
 import { memberName, type TeamMember } from './team';
 
+/** What "remove access" takes away: DMC access, or officer access (administrators lose it too). */
+const accessName = (m: TeamMember) => (m.role === 'dmc' ? 'DMC access' : 'officer access');
+
 interface TeamMembersCardProps {
   members: TeamMember[];
   loading: boolean;
@@ -71,7 +74,7 @@ function MemberRow({
         <KeyRound className="h-4 w-4" />
       </IconButton>
       <IconButton
-        label={isYou ? 'You can’t remove your own access' : `Remove officer access for ${name}`}
+        label={isYou ? 'You can’t remove your own access' : `Remove ${accessName(member)} for ${name}`}
         size="sm"
         disabled={isYou}
         onClick={onRemove}
@@ -83,7 +86,7 @@ function MemberRow({
   );
 }
 
-/** Officers and administrators, with "Remove officer access" behind a confirmation. */
+/** Officers, DMC members and administrators, with "Remove officer access" (or DMC access) behind a confirmation. */
 export default function TeamMembersCard({
   members,
   loading,
@@ -129,7 +132,11 @@ export default function TeamMembersCard({
       if (!data?.length) throw new Error('No change was saved — check that your account is still an administrator.');
       onRemoved(member.id);
       setConfirming(null);
-      push({ title: 'Officer access removed', body: `${name} now has a regular business account.`, tone: 'success' });
+      push({
+        title: member.role === 'dmc' ? 'DMC access removed' : 'Officer access removed',
+        body: `${name} now has a regular business account.`,
+        tone: 'success',
+      });
     } catch (err) {
       push({ title: 'Couldn’t remove access', body: messageOf(err, 'Please try again.'), tone: 'danger' });
     } finally {
@@ -144,7 +151,7 @@ export default function TeamMembersCard({
       <div className="p-5 pb-0 sm:p-6 sm:pb-0">
         <CardHeader
           icon={<Users className="h-[18px] w-[18px]" />}
-          title="Officers & administrators"
+          title="Officers, DMC & administrators"
           subtitle={
             isDemo
               ? 'Sample team — changes are simulated in demo mode.'
@@ -209,7 +216,7 @@ export default function TeamMembersCard({
         onClose={close}
         size="sm"
         icon={<UserMinus className="h-5 w-5" />}
-        title="Remove officer access?"
+        title={`Remove ${confirming ? accessName(confirming) : 'officer access'}?`}
         description={confirming?.email ?? undefined}
         footer={
           <>

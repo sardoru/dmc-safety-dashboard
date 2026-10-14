@@ -312,7 +312,7 @@ export default function InviteListCard({ isDemo, onSent }: InviteListCardProps) 
           )}
           <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-[12px] leading-relaxed text-muted">
             <span className="font-semibold text-ink-2">Everyone on the list is invited as a member business.</span> Invite Public Safety
-            officers and administrators one at a time with Invite someone.
+            officers, DMC and administrators one at a time with Invite someone.
           </p>
           <Field label="Label" optional hint="Where the list came from — only administrators see it.">
             {(id) => <Input id={id} value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} placeholder="Safety Meeting · Mar 11" />}

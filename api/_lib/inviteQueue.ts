@@ -131,7 +131,7 @@ export const OUTCOME = {
   unsure: 'May have gone out — check before inviting again',
   busy: 'Too many at once — trying again next run',
   stillBusy: `Couldn’t send: still too busy after ${MAX_ATTEMPTS} tries. Add the address again to retry.`,
-  notBusiness: 'Not sent: lists are for member businesses — invite officers and administrators with Invite someone',
+  notBusiness: 'Not sent: lists are for member businesses — invite officers, DMC and administrators with Invite someone',
   noAdmin: 'Not sent: whoever queued it is no longer an administrator',
   stopped: 'Cancelled before it was emailed',
 } as const;

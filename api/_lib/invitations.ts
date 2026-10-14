@@ -5,9 +5,10 @@ import { siteUrl } from './membership.js';
 
 /**
  * Invitation emails, curated to the role someone is joining as — a member
- * business, a Public Safety officer or an administrator. One builder for every
- * way in: an administrator's invite, an access code, an approved request to
- * join, and invitations Supabase sends itself.
+ * business, a Public Safety officer, DMC (an officer's access, for the Downtown
+ * Memphis Commission) or an administrator. One builder for every way in: an
+ * administrator's invite, an access code, an approved request to join, and
+ * invitations Supabase sends itself.
  *
  * Copy rule: Memphis-facing words only. No vendor or technology names, nothing
  * about software deciding things, and the voice interview is an "it" — never a
@@ -48,6 +49,7 @@ const BRAND = 'Core Downtown Memphis Safety Dashboard';
 const ROLE_COPY: Record<Role, { name: string; a: string; title: string }> = {
   business: { name: 'member business', a: 'a member business', title: 'Member business' },
   officer: { name: 'Public Safety officer', a: 'a Public Safety officer', title: 'Public Safety officer' },
+  dmc: { name: 'DMC', a: 'a DMC member', title: 'DMC' },
   admin: { name: 'administrator', a: 'an administrator', title: 'Administrator' },
 };
 
@@ -231,7 +233,7 @@ const ADMIN_FEATURES: Item[] = [
   {
     icon: '👥',
     label: 'Team',
-    body: ['Invite member businesses, Public Safety officers and administrators; follow pending invites; manage members’ passkeys; remove officer access.'],
+    body: ['Invite member businesses, Public Safety officers, DMC and administrators; follow pending invites; manage members’ passkeys; remove officer and DMC access.'],
   },
   {
     icon: '🔑',
@@ -256,7 +258,7 @@ function pickFilms(role: Role): FilmPick[] {
       { film: F.howItWorks, chapters: [ch.signIn, ch.businessHome, ch.reportByVoice, ch.lookout] },
     ];
   }
-  if (role === 'officer') {
+  if (role === 'officer' || role === 'dmc') {
     return [
       { film: F.howItWorks, chapters: [ch.opsCenter, ch.districtMap, ch.triage, ch.spokenAlerts, ch.lookout, ch.insights] },
       { film: F.howToReport, chapters: [rc.officersRespond, rc.reportByVoice] },
@@ -285,6 +287,7 @@ function subjectFor(o: InvitationOptions): string {
   if (o.account === 'existing') return `Your ${r.name} access — ${BRAND}`;
   if (biz) return 'You’re invited to join the Downtown Memphis safety network';
   if (o.role === 'officer') return `Your Public Safety officer invitation — ${BRAND}`;
+  if (o.role === 'dmc') return `Your DMC invitation — ${BRAND}`;
   return `You’re invited as an administrator — ${BRAND}`;
 }
 
@@ -344,12 +347,14 @@ function openingFor(o: InvitationOptions, who: string | null): Rich {
 const ROLE_LEAD: Record<Role, string> = {
   business: 'As a member business, you can report an incident in under two minutes, follow it until it’s resolved, and hear about trouble near your storefront.',
   officer: 'As a Public Safety officer, you see each report the moment it’s filed and work it from the first alert to the outcome.',
+  dmc: 'As a DMC member, you have the same access as a Public Safety officer: you see each report the moment it’s filed and can work it from the first alert to the outcome.',
   admin: 'As an administrator, you work reports like an officer and decide who’s on the network.',
 };
 
 const PREHEADER: Record<Role, string> = {
   business: 'Report what you see, follow every report and get alerts within half a mile of your storefront — no password needed.',
   officer: 'The live queue, the district map, voice alerts and triage tools — plus three short films to get you started.',
+  dmc: 'A Public Safety officer’s access: the live queue, the district map, voice alerts and triage tools — plus three short films to get you started.',
   admin: 'The Operations Center plus Team, Access, Businesses, Activity and System — and three short films to get you started.',
 };
 
@@ -400,8 +405,9 @@ function stepsFor(o: InvitationOptions, button: string): Step[] {
     return out;
   };
 
-  if (o.role === 'officer') {
-    return [...staff, { title: 'Watch the officer chapters', body: watch([ch.opsCenter, ch.triage, ch.spokenAlerts]) }];
+  if (o.role === 'officer' || o.role === 'dmc') {
+    const title = o.role === 'dmc' ? 'Watch the Operations Center chapters' : 'Watch the officer chapters';
+    return [...staff, { title, body: watch([ch.opsCenter, ch.triage, ch.spokenAlerts]) }];
   }
   return [
     ...staff,
@@ -435,7 +441,9 @@ function safetyFor(role: Role): Line[] {
     {
       icon: '🔒',
       lead: 'Keep this link private.',
-      body: ['Officers see every report, including officers-only reports, photos, internal notes and reporters’ contact details. Please don’t forward this email.'],
+      body: [
+        `${role === 'dmc' ? 'Like Public Safety officers, you see' : 'Officers see'} every report, including officers-only reports, photos, internal notes and reporters’ contact details. Please don’t forward this email.`,
+      ],
     },
   ];
   if (role === 'admin') {
@@ -467,7 +475,9 @@ function content(o: InvitationOptions): Content {
       ? [{ items: BUSINESS_FEATURES(`${site}/live`) }]
       : o.role === 'officer'
         ? [{ items: OFFICER_FEATURES }]
-        : [
+        : o.role === 'dmc'
+          ? [{ title: 'The same tools as a Public Safety officer', items: OFFICER_FEATURES }]
+          : [
             { title: 'Everything a Public Safety officer can do', items: ADMIN_OFFICER_FEATURES },
             { title: 'Plus, under Administration', items: ADMIN_FEATURES },
           ];

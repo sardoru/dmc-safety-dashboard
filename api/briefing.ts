@@ -48,7 +48,7 @@ function digestLine(i: DigestIncident): string {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['POST'])) return;
 
-  const guard = await requireRole(req, ['officer', 'admin']);
+  const guard = await requireRole(req, ['officer', 'dmc', 'admin']);
   if (!guard.ok) return sendError(res, guard.status, guard.error);
 
   const body = readBody<{ windowHours?: number; incidents?: DigestIncident[]; bolos?: DigestBolo[] }>(req);

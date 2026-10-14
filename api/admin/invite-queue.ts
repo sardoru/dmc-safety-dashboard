@@ -22,7 +22,7 @@ import {
  *       → { added, duplicates, invalid, skipped, alreadyInvited, reinvited, invalidLines, alreadyInvitedEmails }
  *       Pasted text, one address per line ("Name <email>" and stray commas or semicolons are fine).
  *       Lists are for member businesses only: `role` may be omitted or 'business' (anything else is a 400 —
- *       invite officers and administrators one at a time with Invite someone).
+ *       invite officers, DMC and administrators one at a time with Invite someone).
  *       Skipped: addresses already waiting in the queue (`skipped`), and — unless `reinvite: true` —
  *       addresses already invited: a sent row, an open invitation, or an account (`alreadyInvited`).
  *       `dryRun: true` counts without queueing (plus the queue's pace, for the confirm step).
@@ -75,7 +75,7 @@ async function add(admin: SupabaseClient, actor: AuthedUser, body: Record<string
   if (!text.trim()) throw new BadRequest('Paste at least one email address');
   if (text.length > MAX_LIST_CHARS) throw new BadRequest(`That’s too much at once — paste up to ${MAX_LIST_ENTRIES} addresses at a time`);
   if (body.role !== undefined && body.role !== null && body.role !== 'business') {
-    throw new BadRequest('Invite a list is for member businesses only. Invite officers and administrators one at a time with Invite someone.');
+    throw new BadRequest('Invite a list is for member businesses only. Invite officers, DMC and administrators one at a time with Invite someone.');
   }
   const label = cleanLabel(body.label);
   const reinvite = body.reinvite === true;

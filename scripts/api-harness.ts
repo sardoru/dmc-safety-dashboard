@@ -36,6 +36,8 @@ const USERS: Record<string, { id: string; email: string; role: string }> = {
   'tok-biz': { id: '11111111-1111-1111-1111-111111111111', email: 'owner@shop.test', role: 'business' },
   'tok-off': { id: '22222222-2222-2222-2222-222222222222', email: 'officer@dt.test', role: 'officer' },
   'tok-adm': { id: '33333333-3333-3333-3333-333333333333', email: 'admin@dt.test', role: 'admin' },
+  // DMC: exactly an officer's access.
+  'tok-dmc': { id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', email: 'dmc@dt.test', role: 'dmc' },
   // An account made by an invite link that was never opened.
   'tok-inv': { id: '77777777-7777-7777-7777-777777777777', email: 'invitee@shop.test', role: 'business' },
 };
@@ -255,6 +257,9 @@ async function main() {
   const s2 = ((live2?.body ?? {}) as LiveBody).session ?? {};
   check('officer persona', r.data.persona === 'officer' && String(s2.instructions).includes('Officer Hayes'), String(s2.instructions).slice(0, 200));
   check('officer lookup skips businesses table', !calls.some((c) => c.url.includes('/rest/v1/businesses')));
+  calls.length = 0;
+  r = await run('api/live-session.ts', 'POST', 'tok-dmc', { sdp: SDP });
+  check('DMC → the officer persona (an officer’s access)', r.statusCode === 200 && r.data.persona === 'officer' && !calls.some((c) => c.url.includes('/rest/v1/businesses')), r.data);
 
   upstream = (url) => (url.endsWith('/v1/live/sessions') ? json(400, { error: { code: 'invalid_offer', message: 'Offer has no audio' } }) : null);
   r = await run('api/live-session.ts', 'POST', 'tok-biz', { sdp: SDP });
@@ -298,6 +303,8 @@ async function main() {
   r = await run('api/voice-session.ts', 'POST', 'tok-off');
   const dv2 = r.data.dynamicVariables ?? {};
   check('officer: role, name and greeting', dv2.caller_role === 'officer' && dv2.caller_name === 'Officer Hayes' && dv2.opening_line === 'Go ahead, Officer Hayes. What do you have?', dv2);
+  r = await run('api/voice-session.ts', 'POST', 'tok-dmc');
+  check('DMC: the officer’s script', r.statusCode === 200 && r.data.dynamicVariables?.caller_role === 'officer' && r.data.dynamicVariables?.caller_name === 'Officer Hayes', r.data.dynamicVariables);
 
   upstream = (url) => (url.startsWith('https://api.elevenlabs.io/') ? json(401, { detail: { status: 'invalid_api_key' } }) : null);
   console.error = () => {};
@@ -400,6 +407,14 @@ async function main() {
       : null;
   r = await run('api/briefing.ts', 'POST', 'tok-off', { incidents: [] });
   check('cut-off briefing ends on its last whole sentence', r.statusCode === 200 && r.data.text === 'Three reports since noon.', r.data);
+
+  // DMC has an officer's access: every endpoint an officer may call lets DMC in (whatever it then answers).
+  for (const mod of ['api/briefing.ts', 'api/tts.ts', 'api/transcribe.ts', 'api/reports/extract.ts', 'api/voice-session.ts', 'api/live-session.ts']) {
+    const origErrDmc = console.error; console.error = () => {};
+    r = await run(mod, 'POST', 'tok-dmc', {});
+    console.error = origErrDmc;
+    check(`${mod}: DMC is let in (${r.statusCode})`, r.statusCode !== 401 && r.statusCode !== 403, r.data);
+  }
   delete process.env.OPENAI_API_KEY;
 
   // ---------------------------------------------------------------- Email hook
@@ -772,7 +787,7 @@ async function main() {
       ...[...html.matchAll(/\b(?:alt|title|aria-label)="([^"]*)"/g)].map((m) => m[1]),
     ].join(' ');
 
-  const ROLES = ['business', 'officer', 'admin'] as const;
+  const ROLES = ['business', 'officer', 'dmc', 'admin'] as const;
   const SOURCES = ['admin', 'code', 'request'] as const;
   const ACCOUNTS = ['new', 'raised', 'existing'] as const;
   const rendered: { o: InvitationOptions; subject: string; html: string; text: string }[] = [];
@@ -851,6 +866,13 @@ async function main() {
   check('staff are told the Voice alerts button is the bell (icon-only on phones)', [offNew, admNew].every((e) => e.text.includes('Tap the bell (Voice alerts) at the top of the Operations Center') && !/Tap Voice alerts/.test(e.text)));
   check('the live map is promised only while it’s switched on', bizNew.text.includes(`${SITE}/live whenever the public map is switched on`));
 
+  const dmcNew = pick('dmc', 'admin', 'new');
+  check('DMC emails: their own subject and heading, the inviter, "the same access as a Public Safety officer"', dmcNew.subject === 'Your DMC invitation — Core Downtown Memphis Safety Dashboard' && dmcNew.text.includes('You’re invited as a DMC member') && dmcNew.text.includes('Sgt. R. Delgado invited you to join the Core Downtown Memphis Safety Dashboard as a DMC member') && dmcNew.text.includes('the same access as a Public Safety officer') && dmcNew.text.includes('Invitation · DMC'), dmcNew.text.slice(0, 400));
+  check('…an officer’s tools, the bell and a private link — no administrator tools', ['Operations Center', 'Tap the bell (Voice alerts) at the top of the Operations Center', 'Shift briefing', 'Acknowledge → Responding → Resolve', 'internal notes', 'New BOLO', 'Insights', 'Keep this link private', 'Like Public Safety officers, you see every report'].every((w) => dmcNew.text.includes(w)) && !/Review Team and Access|- Team — |- Access — /.test(dmcNew.text), dmcNew.text.slice(0, 400));
+  check('…the officer films and chapters, starting with the tour', firstFilm(dmcNew) === `${SITE}/how-it-works` && dmcNew.text.includes('Watch the Operations Center chapters.') && ['how-it-works?t=161', 'how-it-works?t=186', 'how-it-works?t=208', 'how-it-works?t=235', 'how-it-works?t=263', 'how-it-works?t=287', 'how-to-report?t=135'].every((p) => dmcNew.html.includes(`${SITE}/${p}`) && dmcNew.text.includes(`${SITE}/${p}`)));
+  check('…"You’re now a DMC member" when raised, "Your DMC access" when kept', pick('dmc', 'admin', 'raised').subject === 'You’re now a DMC member — Core Downtown Memphis Safety Dashboard' && pick('dmc', 'admin', 'existing').subject === 'Your DMC access — Core Downtown Memphis Safety Dashboard' && pick('dmc', 'admin', 'existing').text.includes('Your account already has DMC access'), [pick('dmc', 'admin', 'raised').subject, pick('dmc', 'admin', 'existing').subject]);
+  check('…officers’ emails don’t mention DMC; administrators learn they can invite it', offNew.text.includes('Watch the officer chapters.') && offNew.text.includes('Officers see every report') && !offNew.text.includes('DMC') && admNew.text.includes('Invite member businesses, Public Safety officers, DMC and administrators'));
+
   const hostile = invitationEmail({ role: 'business', source: 'admin', account: 'new', email: 'x@shop.test', url: `${SITE}/auth/callback?token_hash=a"b&type=invite`, inviterName: '<img src=x onerror=alert(1)> "Q" & Co' });
   check('names and links are escaped in the HTML', !hostile.html.includes('<img src=x') && hostile.html.includes('&lt;img src=x onerror=alert(1)&gt; &quot;Q&quot; &amp; Co') && hostile.html.includes('token_hash=a&quot;b&amp;type=invite'));
 
@@ -873,6 +895,8 @@ async function main() {
   console.log('api/officers/invite');
   r = await run('api/officers/invite.ts', 'POST', 'tok-off', { email: 'x@shop.test', role: 'business' });
   check('officer → 403 (only admins invite)', r.statusCode === 403, r.data);
+  r = await run('api/officers/invite.ts', 'POST', 'tok-dmc', { email: 'x@shop.test', role: 'business' });
+  check('DMC → 403 too (an officer’s access, not an administrator’s)', r.statusCode === 403, r.data);
   r = await run('api/officers/invite.ts', 'POST', null, { email: 'x@shop.test', role: 'business' });
   check('no session → 401', r.statusCode === 401, r.data);
   r = await run('api/officers/invite.ts', 'GET', 'tok-adm');
@@ -914,6 +938,26 @@ async function main() {
   calls.length = 0;
   r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: 'admin@dt.test', role: 'officer' });
   check('existing admin invited as officer → stays admin', r.data.status === 'unchanged' && r.data.role === 'admin' && profilePatches().length === 0, r.data);
+
+  // DMC: invited one at a time, ranked with officers (the same access), never moved sideways.
+  calls.length = 0; links.length = 0; mails.length = 0;
+  r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: ' Staff@DMC.test ', role: 'dmc' });
+  const dmcInvite = inviteCall('POST').at(-1)?.body as { role?: string; status?: string; email?: string } | undefined;
+  check('DMC invite → pending DMC invite + invite link', r.statusCode === 200 && r.data.status === 'invited' && r.data.role === 'dmc' && dmcInvite?.role === 'dmc' && dmcInvite?.status === 'pending' && dmcInvite?.email === 'staff@dmc.test' && links.at(-1)?.type === 'invite', { d: r.data, dmcInvite, links });
+  check('…emails the DMC invitation, naming the admin', mails.length === 1 && mails[0].to === 'staff@dmc.test' && mails[0].subject === 'Your DMC invitation — Core Downtown Memphis Safety Dashboard' && (mails[0].text ?? '').includes('Officer Hayes invited you to join the Core Downtown Memphis Safety Dashboard as a DMC member'), { s: mails[0]?.subject, t: mails[0]?.text?.slice(0, 300) });
+  check('…and audits invite.sent as dmc', calls.some((c) => c.url.includes('/rest/v1/audit_log') && (c.body as { action?: string })?.action === 'invite.sent' && (c.body as { meta?: { role?: string } })?.meta?.role === 'dmc'));
+  calls.length = 0; mails.length = 0;
+  r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: 'officer@dt.test', role: 'dmc' });
+  check('existing officer invited as DMC → unchanged (same access, never moved sideways), the officer guide', r.statusCode === 200 && r.data.status === 'unchanged' && r.data.role === 'officer' && profilePatches().length === 0 && mails.at(-1)?.subject === 'Your Public Safety officer access — Core Downtown Memphis Safety Dashboard', { d: r.data, s: mails.at(-1)?.subject });
+  calls.length = 0; mails.length = 0;
+  r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: 'dmc@dt.test', role: 'officer' });
+  check('existing DMC member invited as officer → keeps DMC, the DMC guide', r.statusCode === 200 && r.data.status === 'unchanged' && r.data.role === 'dmc' && profilePatches().length === 0 && mails.at(-1)?.subject === 'Your DMC access — Core Downtown Memphis Safety Dashboard' && (mails.at(-1)?.text ?? '').includes('Your account already has DMC access'), { d: r.data, s: mails.at(-1)?.subject });
+  calls.length = 0; mails.length = 0;
+  r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: 'dmc@dt.test', role: 'admin' });
+  check('…and can be raised to administrator', r.statusCode === 200 && r.data.status === 'granted' && r.data.role === 'admin' && profilePatchRole() === 'admin', r.data);
+  calls.length = 0; mails.length = 0;
+  r = await run('api/officers/invite.ts', 'POST', 'tok-adm', { email: 'owner@shop.test', role: 'dmc' });
+  check('existing business invited as DMC → raised now, "You’re now a DMC member"', r.statusCode === 200 && r.data.status === 'granted' && r.data.role === 'dmc' && profilePatchRole() === 'dmc' && mails.at(-1)?.subject === 'You’re now a DMC member — Core Downtown Memphis Safety Dashboard', { d: r.data, s: mails.at(-1)?.subject });
 
   // Open invitations are never lowered either — and never deleted and re-made.
   const inviteAs = async (email: string, role: string) => {
@@ -976,6 +1020,8 @@ async function main() {
   check('Supabase invite, invite already claimed → role from the profile (officer)', r.statusCode === 200 && mails.at(-1)?.subject === OFFICER_INVITE && (mails.at(-1)?.text ?? '').includes(`${SITE}/auth/callback?token_hash=th_inv&type=invite`) && calls.some((c) => c.url.includes('/rest/v1/profiles') && c.url.includes(`id=eq.${USERS['tok-off'].id}`)), { s: r.statusCode, sub: mails.at(-1)?.subject });
   r = await runInviteHook({ id: USERS['tok-adm'].id, email: 'admin@dt.test' });
   check('…an administrator’s profile → the administrator invitation', mails.at(-1)?.subject === ADMIN_INVITE, mails.at(-1)?.subject);
+  r = await runInviteHook({ id: USERS['tok-dmc'].id, email: 'dmc@dt.test' });
+  check('…a DMC profile → the DMC invitation', mails.at(-1)?.subject === 'Your DMC invitation — Core Downtown Memphis Safety Dashboard', mails.at(-1)?.subject);
   pendingInvite = { id: '99999999-9999-9999-9999-999999999999', role: 'admin' };
   r = await runInviteHook({ id: USERS['tok-biz'].id, email: 'owner@shop.test' });
   check('…a stale invite for a higher role never beats the profile (business stays business)', mails.at(-1)?.subject === BUSINESS_INVITE && !calls.some((c) => c.url.includes('/rest/v1/officer_invites')), { sub: mails.at(-1)?.subject });
@@ -1486,7 +1532,7 @@ async function inviteListChecks(ctx: { membershipUpstream: Handler; links: { typ
 
   r = await api('tok-adm', { action: 'add', text: 'Luis@Ortegas.test\nnew.one@shop.test', role: 'business' });
   check('addresses already queued are skipped; the rest added', r.data.added === 1 && r.data.skipped === 1 && queue.length === 5 && byEmail('new.one@shop.test')?.role === 'business', r.data);
-  for (const role of ['officer', 'admin']) {
+  for (const role of ['officer', 'dmc', 'admin']) {
     const before = queue.length;
     r = await api('tok-adm', { action: 'add', text: 'k.price@dt.test', role });
     check(`a list as ${role} → 400 "member businesses only — use Invite someone", nothing queued`, r.statusCode === 400 && /member businesses only/.test(r.data.error) && /Invite someone/.test(r.data.error) && queue.length === before, r.data);

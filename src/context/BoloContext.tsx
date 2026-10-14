@@ -3,6 +3,7 @@ import type { Bolo, BoloStatus, Incident, NewBoloInput } from '../types';
 import { supabase } from '../lib/supabase';
 import { rowToBolo, type BoloRow } from '../lib/incidentRows';
 import { generateId } from '../lib/format';
+import { isStaff } from '../lib/roles';
 import { buildDemoData } from '../data/demo';
 import { useNow } from '../hooks/useNow';
 import { useAuth } from './AuthContext';
@@ -219,7 +220,7 @@ export function BoloProvider({ children }: { children: ReactNode }) {
 
   const reportSighting = useCallback(
     async (bolo: Bolo, input: SightingInput) => {
-      const officer = role === 'officer' || role === 'admin';
+      const officer = isStaff(role);
       return createIncident({
         source: officer ? 'officer' : 'business',
         kind: 'quick',

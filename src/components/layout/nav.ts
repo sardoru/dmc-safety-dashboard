@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { ChartColumn, House, MonitorDot, ScanEye, Settings, ShieldCheck, SquarePen } from 'lucide-react';
+import { isStaff } from '../../lib/roles';
 import type { Role } from '../../types';
 
 export interface NavItem {
@@ -14,12 +15,12 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { to: '/home', label: 'Home', short: 'Home', icon: House, roles: ['business'] },
-  { to: '/ops', label: 'Operations Center', short: 'Ops', icon: MonitorDot, roles: ['officer', 'admin'] },
-  { to: '/report', label: 'Report an incident', short: 'Report', icon: SquarePen, roles: ['business', 'officer', 'admin'], primary: true },
-  { to: '/bolo', label: 'Lookout board', short: 'Lookout', icon: ScanEye, roles: ['business', 'officer', 'admin'] },
-  { to: '/insights', label: 'Insights', short: 'Insights', icon: ChartColumn, roles: ['officer', 'admin'] },
+  { to: '/ops', label: 'Operations Center', short: 'Ops', icon: MonitorDot, roles: ['officer', 'dmc', 'admin'] },
+  { to: '/report', label: 'Report an incident', short: 'Report', icon: SquarePen, roles: ['business', 'officer', 'dmc', 'admin'], primary: true },
+  { to: '/bolo', label: 'Lookout board', short: 'Lookout', icon: ScanEye, roles: ['business', 'officer', 'dmc', 'admin'] },
+  { to: '/insights', label: 'Insights', short: 'Insights', icon: ChartColumn, roles: ['officer', 'dmc', 'admin'] },
   { to: '/admin', label: 'Administration', short: 'Admin', icon: ShieldCheck, roles: ['admin'] },
-  { to: '/account', label: 'Settings', short: 'Settings', icon: Settings, roles: ['business', 'officer', 'admin'] },
+  { to: '/account', label: 'Settings', short: 'Settings', icon: Settings, roles: ['business', 'officer', 'dmc', 'admin'] },
 ];
 
 export function navFor(role: Role | null): NavItem[] {
@@ -27,7 +28,7 @@ export function navFor(role: Role | null): NavItem[] {
 }
 
 export function homePathFor(role: Role | null): string {
-  if (role === 'officer' || role === 'admin') return '/ops';
+  if (isStaff(role)) return '/ops';
   if (role === 'business') return '/home';
   return '/';
 }
@@ -35,5 +36,6 @@ export function homePathFor(role: Role | null): string {
 export const ROLE_LABEL: Record<Role, string> = {
   business: 'Business',
   officer: 'Public Safety',
+  dmc: 'DMC',
   admin: 'Administrator',
 };

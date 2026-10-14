@@ -69,11 +69,14 @@ export function clientIp(headers: Record<string, string | string[] | undefined>)
   return first || 'unknown';
 }
 
-/** Higher outranks lower. Invitations, access codes and approvals only ever raise a role. */
-export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, admin: 3 };
+/**
+ * Higher outranks lower. Invitations, access codes and approvals only ever raise a role. DMC ranks with
+ * officers (the same access), so none of them moves anyone between the two (as role_rank() in 0009).
+ */
+export const ROLE_RANK: Record<Role, number> = { business: 1, officer: 2, dmc: 2, admin: 3 };
 
 export function parseRole(value: unknown): Role | null {
-  return value === 'business' || value === 'officer' || value === 'admin' ? value : null;
+  return value === 'business' || value === 'officer' || value === 'dmc' || value === 'admin' ? value : null;
 }
 
 /** A role from the database; anything unexpected is treated as the least-privileged one. */

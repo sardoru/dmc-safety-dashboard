@@ -74,6 +74,7 @@ export default function AdminPortal() {
   });
   const issues = countIssues(health);
   const admins = team.members.filter((m) => m.role === 'admin').length;
+  const dmc = team.members.filter((m) => m.role === 'dmc').length;
 
   const tabOptions: { value: Tab; label: ReactNode; icon?: ReactNode; count?: number }[] = [
     {
@@ -120,7 +121,7 @@ export default function AdminPortal() {
       <PageHeader
         eyebrow="Administration"
         title="Team, access & system"
-        description="Invite businesses, officers and administrators, hand out access codes, approve requests to join, review member businesses and check every integration."
+        description="Invite businesses, officers, DMC and administrators, hand out access codes, approve requests to join, review member businesses and check every integration."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -128,7 +129,13 @@ export default function AdminPortal() {
           label="Officers"
           icon={<Users className="h-3.5 w-3.5" />}
           value={team.loading ? '—' : team.members.length}
-          hint={team.loading ? 'Loading…' : admins > 0 ? `Includes ${plural(admins, 'admin')}` : 'No administrators'}
+          hint={
+            team.loading
+              ? 'Loading…'
+              : admins > 0
+                ? `Includes ${plural(admins, 'admin')}${dmc > 0 ? ` and ${dmc} DMC` : ''}`
+                : 'No administrators'
+          }
         />
         <Stat
           label="Businesses"

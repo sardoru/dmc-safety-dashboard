@@ -16,7 +16,8 @@ publish be-on-the-lookout notices, and **hear new reports read aloud**.
 | --- | --- |
 | **Businesses** | A home screen with their open reports, live status updates and nearby community alerts on a map centred on their storefront. Three ways to report: **Report by voice** (an automated two-way interview — they just talk), a **guided form** that can read its questions aloud and organise dictated notes ("Organize my notes"), or a **quick alert**. Photos, people and vehicle descriptions, "happening now" / weapon / injury flags, and a spoken read-back confirmation. |
 | **Public-safety officers** | The **Operations Center**: a live, prioritised queue (P1–P4) with new-report flashes, a district map with heat and BOLO layers, an activity stream, KPIs, **spoken alerts** for new high-priority reports, and a spoken **shift briefing** summarised from the last hours. Full triage on every report: acknowledge → responding → resolved (with outcome), priority, assignment, internal or public notes, directions, "Listen", and one-click BOLOs. Officers can file reports by voice too. |
-| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (**role-specific invitations** for businesses, officers and administrators — one at a time or a **pasted list, sent 5 every 15 minutes** — team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
+| **DMC** | The Downtown Memphis Commission: exactly what a Public Safety officer gets (above), and nothing an administrator has. An administrator invites each one with **Invite someone** → **DMC**. |
+| **Everyone signed in** | The **Lookout board** (active BOLOs with sightings), **Insights** for officers (trends, hot spots, response times), **Settings** (profile, storefront, voice + alert preferences, passkeys) and **Administration** for admins (**role-specific invitations** for businesses, officers, DMC and administrators — one at a time or a **pasted list, sent 5 every 15 minutes** — team, **access codes**, invite-only sign-up and **requests to join**, the public map switch, an **activity log**, passkeys per member, businesses, system status). |
 | **The public** | A **live map at [`/live`](https://www.901safety.com/live)** of what's been reported downtown — the type, priority, status and an approximate spot of community reports, never details or people — and **[`/join`](https://www.901safety.com/join)**, where a business or officer joins with an access code (or asks to join while sign-up is invite-only). |
 
 The app is fully responsive (phone bottom-tab layout with a centre **Report** button; desktop
@@ -123,7 +124,9 @@ Vite + React 19 + TypeScript + Tailwind v4 (SPA)
   (`community_reports`: other members' community reports without their private fields; `reports`
   for the reporter and officers only; members read only their own storefront), then
   [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql) (Invite a
-  list's brakes: `emailing_at`, the self-pause reason, one run per quarter hour, the last run).
+  list's brakes: `emailing_at`, the self-pause reason, one run per quarter hour, the last run), then
+  [`0009_dmc_role.sql`](./supabase/migrations/0009_dmc_role.sql) (the DMC role: `is_officer()`
+  includes `dmc`, which ranks with officers).
 
 ### Demo mode vs. connected mode
 With no Supabase variables the app runs in **demo mode**: a realistic downtown dataset, a role
@@ -150,10 +153,12 @@ for it every two minutes and switch to `community_reports` by themselves.
    [`0005_display_links.sql`](./supabase/migrations/0005_display_links.sql), then
    [`0006_invite_queue.sql`](./supabase/migrations/0006_invite_queue.sql), then
    [`0007_community_report_privacy.sql`](./supabase/migrations/0007_community_report_privacy.sql), then
-   [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql)
-   into the SQL editor. `0002`–`0008` are idempotent and keep existing data. On a live project,
-   deploy the app before running `0007` (see [Deploy](#deploy-vercel)), and run `0008` **before**
-   deploying the app that needs it ([Inviting a list](#inviting-a-list-paced)).
+   [`0008_invite_queue_brakes.sql`](./supabase/migrations/0008_invite_queue_brakes.sql), then
+   [`0009_dmc_role.sql`](./supabase/migrations/0009_dmc_role.sql)
+   into the SQL editor. `0002`–`0009` are idempotent and keep existing data. On a live project,
+   deploy the app before running `0007` (see [Deploy](#deploy-vercel)), and run `0008` and `0009`
+   **before** deploying the app that needs them ([Inviting a list](#inviting-a-list-paced), the DMC
+   role).
 3. Edit the seeded super-admin email at the bottom of `0001` (defaults to `sardoru@gmail.com`).
 4. **Auth → URL Configuration:** add `https://<your-domain>/auth/callback` to the redirect list.
 5. **Auth → Hooks → Before User Created** → Postgres function
@@ -224,6 +229,8 @@ npx tsc -p api/tsconfig.json --noEmit
 dropdb --if-exists dmc_0007_test; createdb dmc_0007_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0007_test -f supabase/tests/0007_community_report_privacy.test.sql
 # Invite a list's brakes (claim, cancel, recovery, one run per quarter hour) — same rules:
 dropdb --if-exists dmc_0008_test; createdb dmc_0008_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0008_test -f supabase/tests/0008_invite_queue_brakes.test.sql
+# the DMC role reads and writes exactly what an officer does — same rules:
+dropdb --if-exists dmc_0009_test; createdb dmc_0009_test && psql -X -q -v ON_ERROR_STOP=1 -d dmc_0009_test -f supabase/tests/0009_dmc_role.test.sql
 ```
 
 The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functions together.
@@ -246,6 +253,11 @@ The `/api` functions run on Vercel; use `vercel dev` to serve the SPA and functi
 > gets a preview deployment, behind Vercel login. `vercel --prod` still works for a manual deploy.
 > **A PR that needs a database migration:** apply the migration before merging, because the merge
 > is the deploy.
+
+**Migration `0009` (the DMC role) goes before the merge.** Run
+[`0009_dmc_role.sql`](./supabase/migrations/0009_dmc_role.sql) in the Supabase SQL editor, then merge.
+The current app is unaffected (nobody has the role yet); the new app offers **DMC** in Invite someone,
+and without `0009` that invitation fails on the role check.
 
 `vercel.json` also schedules one cron job — `/api/cron/invites` every 15 minutes, for
 [Inviting a list](#inviting-a-list-paced). Vercel runs crons on the production deployment only, and
@@ -368,7 +380,7 @@ How they're wired:
 
 Every way in sends one invitation, written for the role — built by
 [`api/_lib/invitations.ts`](./api/_lib/invitations.ts): an administrator's invite (Admin → Team →
-**Invite someone**: a member business, a Public Safety officer or an administrator), an access code
+**Invite someone**: a member business, a Public Safety officer, DMC or an administrator), an access code
 (`/join`), an approved request to join, and invitations Supabase sends itself (the Send Email hook
 looks up the invited role).
 
@@ -498,12 +510,16 @@ scripts/api-harness.ts   mocked-upstream tests for the voice, AI and membership 
 scripts/email-previews.ts  every invitation email as HTML + text, to look at without sending
 scripts/voice-agent.ts   create/update the ElevenLabs interviewer agent
 supabase/migrations/     schema + RLS
-supabase/tests/          SQL tests on plain Postgres (0007: who can read which report fields; 0008: the invite queue's brakes)
+supabase/tests/          SQL tests on plain Postgres (0007: who can read which report fields; 0008: the invite queue's brakes;
+                         0009: DMC reads and writes exactly what an officer does)
 ```
 
 ## Security and privacy
 - Secrets live only in serverless functions; the browser uses the anon key under RLS.
 - Roles can't be self-escalated (a Postgres trigger blocks non-admin role changes).
+- **DMC** has exactly an officer's access, decided by the database: `is_officer()` includes `dmc`
+  (migration `0009`). DMC members can't invite, administer or change roles, and an invitation or
+  access code never swaps officer and DMC (they rank the same).
 - Reports can be shared with the community or kept **officers-only**; internal notes are never
   shown to reporters; photos live in a private bucket served by short-lived signed URLs.
 - **Private report fields stay private.** `reports` is readable only by the reporter (their own

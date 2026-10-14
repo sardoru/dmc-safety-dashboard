@@ -30,7 +30,8 @@ export interface UserProfile {
 
 // ── Accounts ─────────────────────────────────────────────────────────────────
 
-export type Role = 'business' | 'officer' | 'admin';
+/** `dmc`: the Downtown Memphis Commission — exactly a Public Safety officer's access (see `isStaff`). */
+export type Role = 'business' | 'officer' | 'dmc' | 'admin';
 
 export interface Profile {
   id: string;

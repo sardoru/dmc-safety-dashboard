@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useVoice } from '../../context/VoiceContext';
 import { cn } from '../../lib/format';
+import { isStaff } from '../../lib/roles';
 import { PRIORITIES, PRIORITY_LIST, toPriority } from '../../lib/taxonomy';
 import type { Priority } from '../../types';
 import { Button } from '../ui/Button';
@@ -104,7 +105,7 @@ export default function VoiceAlertsCard() {
   const { role } = useAuth();
   const { prefs, setPrefs, unlock, audioReady, voiceLabel } = useVoice();
   const voiceHeadingId = useId();
-  const staff = role === 'officer' || role === 'admin';
+  const staff = isStaff(role);
 
   const toggleAlerts = (on: boolean) => {
     // The switch click is a user gesture, so this also unlocks audio playback.

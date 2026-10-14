@@ -6,10 +6,10 @@ import { sendError, sendJson, methodNotAllowed, readBody } from '../_lib/http.js
 import { inviterName, normalizeEmail, parseRole } from '../_lib/membership.js';
 
 /**
- * Admin only — invite someone by email as a member business, a Public Safety officer or an
- * administrator:
+ * Admin only — invite someone by email as a member business, a Public Safety officer, DMC (an
+ * officer's access) or an administrator:
  *
- *   POST { email, role: 'business' | 'officer' | 'admin' }
+ *   POST { email, role: 'business' | 'officer' | 'dmc' | 'admin' }
  *   → { status: 'invited' | 'granted' | 'unchanged', role, emailed }
  *
  * Never lowers anyone. A new address gets a pending invite — or its open one is raised (or kept, when
@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const email = normalizeEmail(body.email);
   if (!email) return sendError(res, 400, 'A valid email is required');
   const role = parseRole(body.role);
-  if (!role) return sendError(res, 400, 'Choose a role: business, officer or admin');
+  if (!role) return sendError(res, 400, 'Choose a role: business, officer, dmc or admin');
 
   const admin = getAdmin();
 

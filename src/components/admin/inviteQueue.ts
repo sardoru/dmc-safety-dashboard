@@ -121,7 +121,7 @@ export const COUNT_TONE: Record<QueueStatus, string> = {
 };
 
 const ms = (s: string | null) => (s ? new Date(s).getTime() : null);
-const toRole = (r: string): Role => (r === 'admin' || r === 'officer' ? r : 'business');
+const toRole = (r: string): Role => (r === 'admin' || r === 'officer' || r === 'dmc' ? r : 'business');
 
 export function rowToItem(r: QueueRowJson): QueueItem {
   return {

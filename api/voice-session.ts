@@ -45,7 +45,7 @@ function tooMany(userId: string, now = Date.now()): boolean {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (methodNotAllowed(req, res, ['GET', 'POST'])) return;
 
-  const guard = await requireRole(req, ['business', 'officer', 'admin']);
+  const guard = await requireRole(req, ['business', 'officer', 'dmc', 'admin']);
   if (!guard.ok) return sendError(res, guard.status, guard.error);
 
   const p = provider();
